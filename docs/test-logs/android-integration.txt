@@ -16,6 +16,15 @@ PASS image input limit
 PASS LocalClip has focus
 PASS background Mac to Android clipboard write
 PASS background clipboard read denied without default IME
+PASS share sheet resolves to transparent receiver
+PASS external text share reaches receiver
+PASS share receiver closes itself
+PASS external text share delivers in background
+PASS sharing does not open MainActivity
+PASS external image share reaches receiver
+PASS image share receiver closes after staging bytes
+PASS private source URI image delivered after receiver closes
+PASS external image share leaves main screen in background
 PASS LocalClip has focus
 PASS prominent connected badge after authentication
 s_glBindAttribLocation: bind attrib 0 name position
@@ -23,7 +32,12 @@ s_glBindAttribLocation: bind attrib 1 name color
 s_glBindAttribLocation: bind attrib 2 name localCoord
 PASS Disconnect stops connection service
 PASS disconnected badge and reconnect send action
-PASS Share automatically reconnects and delivers
+PASS disconnected external share reaches receiver
+PASS disconnected share receiver closes
+PASS Share automatically reconnects and delivers in background
+PASS reconnecting share leaves previous app in front
+PASS LocalClip has focus
+PASS reconnected share applied exact text
 PASS Second disconnect completed
 PASS clipboard button reconnects and delivers
 PASS selected keyboard remains unchanged
@@ -32,4 +46,7 @@ PASS focused automatic sending with normal keyboard
 PASS incoming clipboard echo suppressed
 PASS Disconnect before removing pairing
 PASS unpaired state exposes pairing without a connected badge
-Android clipboard integration: 31 assertions passed on API 34
+PASS unpaired share reaches receiver
+PASS unpaired share closes without opening main screen
+PASS unpaired share does not launch main or a connection
+Android clipboard integration: 48 assertions passed on API 34

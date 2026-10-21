@@ -51,7 +51,7 @@ public final class MainActivity extends Activity {
         sendButton=button(sending,"Send clipboard to Mac",this::sendClipboard,true);
         button(sending,"Choose a photo to send",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,10);},false);
         label(sending,"Or send directly from another app",16).setTypeface(null,Typeface.BOLD);
-        label(sending,"1. Select text or open a photo.\n2. Tap Share (not just Copy).\n3. Choose LocalClip in the Android share sheet.\n\nLocalClip connects and sends it to your paired Mac. If the app has no Share option, use Copy and the blue button above.",15);
+        label(sending,"1. Select text or open a photo.\n2. Tap Share (not just Copy).\n3. Choose LocalClip in the Android share sheet.\n\nSharing sends in the background and returns to your previous app. You can also use Share on Android’s clipboard popup after copying. If no Share action is available, use Copy and the blue button above.",15);
         auto=new CheckBox(this);auto.setText("Send new clipboard changes while LocalClip is open");auto.setTextColor(INK);auto.setChecked(App.automatic(this));auto.setOnCheckedChangeListener((v,checked)->getSharedPreferences("settings",0).edit().putBoolean("automatic",checked).apply());sending.addView(auto);
         label(sending,"Android allows clipboard reading while LocalClip is on screen. With Gboard, it cannot automatically read copies made in the background.",13).setTextColor(MUTED);
 
@@ -72,7 +72,7 @@ public final class MainActivity extends Activity {
             shared=null;stopService(new Intent(this,SyncService.class));
             try{Config.forget(this);App.lastDigest="";updatePeer();App.detail="Pairing removed. Pair with a Mac to send again.";}catch(Exception e){App.detail="Could not remove pairing";}
         },false);
-        label(root,"Mac → Android arrives automatically while connected and unlocked. Keep the connection notification running and the Mac awake. No cloud or telemetry. Images: up to 8 MiB / 16 megapixels; pasting depends on the destination app. Build 0.2.0.",13).setTextColor(MUTED);
+        label(root,"Mac → Android arrives automatically while connected and unlocked. Keep the connection notification running and the Mac awake. No cloud or telemetry. Images: up to 8 MiB / 16 megapixels; pasting depends on the destination app. Build 0.2.1.",13).setTextColor(MUTED);
         clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
         listener=()->{if(hasWindowFocus()&&App.automatic(this)&&isConnected())App.send(this,clipboard.getPrimaryClip(),false);};
         updatePeer();handleIntent(getIntent());renderConnection();
@@ -123,11 +123,6 @@ public final class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);handleIntent(intent);}
     void handleIntent(Intent intent){
         if("localclip.SEND".equals(intent.getAction())){sendOnFocus=true;if(hasWindowFocus()){sendOnFocus=false;sendClipboard();}return;}
-        if(Intent.ACTION_SEND.equals(intent.getAction())){
-            if(intent.getType()!=null&&intent.getType().startsWith("image/")){
-                Uri uri=intent.getParcelableExtra(Intent.EXTRA_STREAM);if(uri!=null)queue(ClipData.newUri(getContentResolver(),"Shared image",uri));
-            }else{CharSequence t=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);if(t!=null)queue(ClipData.newPlainText("Shared text",t));}
-        }else if(Intent.ACTION_PROCESS_TEXT.equals(intent.getAction())){CharSequence t=intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);if(t!=null)queue(ClipData.newPlainText("Selected text",t));}
     }
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);App.focused=focus;if(focus){if(sendOnFocus){sendOnFocus=false;handler.postDelayed(this::sendClipboard,200);}if(shared!=null)connect();}}
     @Override protected void onResume(){super.onResume();clipboard.addPrimaryClipChangedListener(listener);handler.post(refresh);}

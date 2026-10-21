@@ -17,6 +17,9 @@ public final class SyncService extends Service {
     private volatile Socket socket;
     private volatile Connection connection;
     private volatile long lastResponse;
+    private final Object sharedLock=new Object();
+    private Wire.Message sharedItem;
+    private final java.util.Set<String> sharedDeliveries=ConcurrentHashMap.newKeySet();
     static final class Connection {
         final Socket socket;final Wire.Session crypto; final OutputStream out;
         Connection(Socket socket,Wire.Session crypto,OutputStream out){this.socket=socket;this.crypto=crypto;this.out=out;}
@@ -37,11 +40,15 @@ public final class SyncService extends Service {
     public long responseAgeMillis(){return Math.max(0,SystemClock.elapsedRealtime()-lastResponse);}
     public boolean connected(){return connection!=null;}
     @Override public int onStartCommand(Intent intent,int flags,int id){
+        if(intent!=null&&"localclip.SHARED".equals(intent.getAction())){
+            Wire.Message message=App.takeShared(intent.getStringExtra("handoff"));
+            if(message!=null)queueShared(message);
+        }
         if(running.compareAndSet(false,true)){
             new Thread(this::connectLoop,"localclip-connection").start();
             heartbeat.scheduleAtFixedRate(()->{
                 if(connection!=null)try{send(new Wire.Message(3,new byte[0]),null);}catch(Exception ignored){}
-                long now=SystemClock.elapsedRealtime();for(String key:pending.keySet()){Long time=pending.get(key);if(time!=null&&now-time>12000){pending.remove(key);App.detail="No Mac delivery confirmation. Send again after reconnecting.";}}
+                long now=SystemClock.elapsedRealtime();for(String key:pending.keySet()){Long time=pending.get(key);if(time!=null&&now-time>12000){pending.remove(key);App.detail="No Mac delivery confirmation. Send again after reconnecting.";if(sharedDeliveries.remove(key))transferNotice("Not confirmed. Share again after reconnecting.");}}
             },10,10,TimeUnit.SECONDS);
         }return START_NOT_STICKY;
     }
@@ -54,10 +61,10 @@ public final class SyncService extends Service {
                 socket=s;status(App.Phase.CONNECTING,"Connecting to "+c.host);s.connect(new InetSocketAddress(c.host,c.port),6000);s.setTcpNoDelay(true);s.setSoTimeout(6000);
                 InputStream in=s.getInputStream();OutputStream out=s.getOutputStream();Wire.Session crypto=Wire.client(in,out,c.key);
                 if(!running.get())break;
-                s.setSoTimeout(45000);Connection active=new Connection(s,crypto,out);lastResponse=SystemClock.elapsedRealtime();connection=active;delay=1;status(App.Phase.CONNECTED,"Connected to Mac · encrypted");
+                s.setSoTimeout(45000);Connection active=new Connection(s,crypto,out);lastResponse=SystemClock.elapsedRealtime();connection=active;delay=1;status(App.Phase.CONNECTED,"Connected to Mac · encrypted");flushShared();
                 while(running.get()&&connection==active){
                     Wire.Message message=crypto.rx.receive(in);lastResponse=SystemClock.elapsedRealtime();
-                    if(message.type==4){if(pending.remove(Wire.hex(message.id))!=null)App.detail="Mac clipboard updated — ready to paste";}
+                    if(message.type==4){if(pending.remove(Wire.hex(message.id))!=null){App.detail="Mac clipboard updated — ready to paste";if(sharedDeliveries.remove(Wire.hex(message.id)))transferNotice("Shared item delivered to Mac");}}
                     else if(message.type==3)send(new Wire.Message(4,message.id,new byte[0]),null);
                     else {
                         try{Clips.apply(this,message);send(new Wire.Message(4,message.id,new byte[0]),null);}
@@ -70,20 +77,40 @@ public final class SyncService extends Service {
         }
         if(running.get())App.main.post(this::stopSelf);
     }
+    private void transferNotice(String text){
+        getSystemService(NotificationManager.class).notify(1,notification(text));
+    }
+    private void queueShared(Wire.Message message){
+        synchronized(sharedLock){sharedItem=message;}
+        App.detail="Shared item queued — waiting for Mac";
+        App.main.postDelayed(()->{
+            boolean expired=false;synchronized(sharedLock){if(sharedItem==message){sharedItem=null;expired=true;}}
+            if(expired){App.detail="Shared item expired. Share again when the Mac is available.";if(running.get())transferNotice("Mac unavailable. Shared item expired; share again.");}
+        },30000);
+        flushShared();
+    }
+    private void flushShared(){
+        synchronized(sharedLock){
+            if(sharedItem==null||connection==null)return;
+            Wire.Message message=sharedItem;String id=Wire.hex(message.id);sharedDeliveries.add(id);
+            try{send(message,null);sharedItem=null;}
+            catch(Exception e){sharedDeliveries.remove(id);sharedItem=null;App.detail="Could not send shared item. Share again.";transferNotice("Could not send. Share again.");}
+        }
+    }
     public void send(Wire.Message message,Runnable sent)throws Exception{
         final Connection active=connection;if(active==null)throw new Exception("Mac offline. Connect and send again.");
         try{writer.execute(()->{
-            if(connection!=active||!running.get()){App.detail="Connection changed. Send again.";return;}
+            if(connection!=active||!running.get()){App.detail="Connection changed. Send again.";if(sharedDeliveries.remove(Wire.hex(message.id)))transferNotice("Connection changed. Share again.");return;}
             // Socket writes have no Java write timeout. Close a stalled connection after 12 seconds.
             ScheduledFuture<?> deadline=heartbeat.schedule(()->{try{active.socket.close();}catch(IOException ignored){}},12,TimeUnit.SECONDS);
             try{
                 if(message.type<=2){pending.put(Wire.hex(message.id),SystemClock.elapsedRealtime());App.detail="Sent "+(message.type==1?"text":"image")+" · waiting for Mac confirmation";}
                 synchronized(outputLock){active.out.write(active.crypto.tx.seal(message.encode()));active.out.flush();}
                 if(sent!=null)sent.run();
-            }catch(Exception e){if(message.type<=2){pending.remove(Wire.hex(message.id));App.detail="Send failed. Reconnect and send again.";}try{active.socket.close();}catch(IOException ignored){}
+            }catch(Exception e){if(message.type<=2){pending.remove(Wire.hex(message.id));App.detail="Send failed. Reconnect and send again.";if(sharedDeliveries.remove(Wire.hex(message.id)))transferNotice("Send failed. Share again after reconnecting.");}try{active.socket.close();}catch(IOException ignored){}
             }finally{deadline.cancel(false);}
         });}catch(RejectedExecutionException e){throw new Exception("Connection busy. Send again.");}
     }
-    @Override public void onDestroy(){running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
+    @Override public void onDestroy(){running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();sharedDeliveries.clear();synchronized(sharedLock){sharedItem=null;}if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
     @Override public IBinder onBind(Intent intent){return null;}
 }

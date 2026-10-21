@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+- Share from Android’s clipboard popup or another app without opening the main LocalClip screen.
+- Use a transparent share receiver, stage URI data before its grant ends, and hand bytes to the foreground service for background delivery/reconnection.
+- Report shared-item delivery/failure in the ongoing notification; show a short explanation instead of opening the main screen when unpaired.
+- Test external private-image URI grants and both connected/disconnected shares from a separate app.
+- Add a separate API 34 ADB-shell research probe: automatic text-copy callbacks and image reads with the normal keyboard unchanged. Not integrated into the APK’s sending path.
+
 ## 0.2.0
 
 - Keep Gboard: remove the replacement keyboard and all keyboard-switching prompts.

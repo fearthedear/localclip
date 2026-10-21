@@ -11,7 +11,7 @@ A small, MIT-licensed clipboard companion for macOS and Android. Text and images
 - `LocalClip-debug.apk`: Android 10/API 29 or later, target API 36; signed with a development key, debug-installable.
 - `LocalClip-macOS-arm64.zip`: Apple silicon, macOS 13 or later; ad-hoc signed, not notarized. Extract it and move `LocalClip.app` into Applications.
 
-Version 0.2.0 keeps the existing pairing and wire protocol. Install the new APK over 0.1.0 to preserve pairing; both supplied APKs have the same development signing certificate. The Mac update improves the instructions and remains compatible with either Android version.
+Version 0.2.1 adds background sharing from Android’s clipboard popup or any app’s Share action. Install it over 0.1.0 or 0.2.0 to preserve pairing; the signing certificate and wire protocol are unchanged. Your existing Mac app remains compatible.
 
 ## Send from Android while using Gboard
 
@@ -29,7 +29,9 @@ You can also tap **Send clipboard** in the connection notification or add the **
 1. Select text or open a photo.
 2. Tap that app's **Share** action. Copy and Share are different actions.
 3. Choose **LocalClip** in Android's share sheet. You may need to expand the full app list.
-4. LocalClip connects to the paired Mac and sends the item. No extra Send tap is needed.
+4. LocalClip’s transparent share receiver stages the item, closes, and leaves the previous app visible. The running service connects and sends in the background; its notification reports delivery. No main LocalClip screen or extra Send tap is needed.
+
+You can also use **Share on Android’s small clipboard popup after copying → LocalClip**. Android briefly launches an Activity to receive a share, but it is transparent and excluded from Recents. If you have not paired yet, it shows a short message asking you to open LocalClip and pair; it does not open the main screen for you.
 
 If an app has no Share action, use Copy and the blue clipboard button instead. You can also use **Choose a photo to send** inside LocalClip. Selected text may offer a **LocalClip** action in the text selection menu.
 
@@ -67,7 +69,7 @@ Treat the pairing code like a password and replace it in both devices' clipboard
 | Android → Mac with Gboard | Explicit Share, selected-text action, or the focused Send clipboard button. The app never changes the selected keyboard. |
 | Focused automatic sending | Optional checkbox sends new clipboard changes while LocalClip is on screen. Opening the app alone does not upload the existing clipboard. |
 | Images | PNG on the wire; max 8 MiB and 16 megapixels. Android can share/choose other decodable formats and converts them to PNG. Mac PNG/TIFF clipboard images are supported. Pasting depends on the destination app. |
-| Disconnected explicit send | The current screen can hold one explicitly shared/copied item in memory for up to 30 seconds while reconnecting. Return to LocalClip before expiry if needed; there is no persistent delivery queue. |
+| Disconnected explicit send | A share can wait in the foreground service for up to 30 seconds after its receiver closes. In-app clipboard/photo actions wait in the main screen while it has focus. No persistent queue; an unavailable Mac requires sharing again after expiry. |
 | Offline automatic changes | Dropped; reconnect and explicitly send the item again. |
 | Locked phone | Incoming clipboard updates are skipped and remain unconfirmed on the Mac. Unlock and send again. |
 
@@ -132,5 +134,7 @@ adb shell am instrument -w org.localclip.tests/localclip.AndroidTests
 ```
 
 The emulator test peer is `10.0.2.2:47493`. Stop it after testing. The test setup selects the emulator's built-in Latin keyboard before the tests; app operations then leave it unchanged. UI screenshots are captured only by instrumentation, temporarily clearing FLAG_SECURE and restoring it; production continues to protect the app window. Test APKs and fixed fixture keys are never used for actual clipboard sharing.
+
+For automatic background sending with Gboard, see the [ADB/Shizuku research and tested prototype](docs/ADB-CLIPBOARD.md). The APK does not yet include this integration; the experiment is outside the APK.
 
 See [test results](docs/TEST-RESULTS.md), [security notes](SECURITY.md), [wire protocol](docs/PROTOCOL.md), and [platform investigation](docs/PLATFORM-NOTES.md). There is no independent security audit or forward secrecy. The user reports the initial build works on their devices; the automated checks ran on an API 34 emulator, and do not certify every Pixel OS build.

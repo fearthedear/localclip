@@ -1,0 +1,5 @@
+PROBE_CONTEXT package=com.android.shell attribution=com.android.shell uid=2000
+READY shell clipboard listener; copy synthetic test text/image in another app
+EVENT 1 text-readable chars=13
+EVENT 2 text-readable chars=13
+EVENT 3 image-readable bytes=107

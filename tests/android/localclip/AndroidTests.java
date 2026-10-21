@@ -36,9 +36,9 @@ public final class AndroidTests extends Instrumentation {
             runOnMainSync(()->{cb.setPrimaryClip(ClipData.newPlainText("Test","test:unicode 🌏 日本語"));activity.sendClipboard();});
             await("text round trip through OS clipboard",()->text().equals("mac:test:unicode 🌏 日本語"));
             // Share-sheet intent reaches the real Activity and uses the same authenticated service.
-            Intent share=new Intent(c,MainActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"test:share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            Intent share=new Intent(c,ShareActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"test:share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             c.startActivity(share);await("Share text round trip",()->text().equals("mac:test:share"));
-            Intent selected=new Intent(c,MainActivity.class).setAction(Intent.ACTION_PROCESS_TEXT).setType("text/plain").putExtra(Intent.EXTRA_PROCESS_TEXT,"test:selected").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            Intent selected=new Intent(c,ShareActivity.class).setAction(Intent.ACTION_PROCESS_TEXT).setType("text/plain").putExtra(Intent.EXTRA_PROCESS_TEXT,"test:selected").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             c.startActivity(selected);await("selected text round trip",()->text().equals("mac:test:selected"));
             Bitmap b=Bitmap.createBitmap(4,3,Bitmap.Config.ARGB_8888);b.eraseColor(0xff00aaff);ByteArrayOutputStream bytes=new ByteArrayOutputStream();b.compress(Bitmap.CompressFormat.PNG,100,bytes);b.recycle();
             Wire.Message image=new Wire.Message(2,bytes.toByteArray());runOnMainSync(()->{try{Clips.apply(c,image);App.detail="Sending test image";activity.sendClipboard();}catch(Exception e){throw new RuntimeException(e);}});
@@ -48,7 +48,7 @@ public final class AndroidTests extends Instrumentation {
             // Re-encode source image (the production send path) may encode deterministically on this build.
             Bitmap decoded=BitmapFactory.decodeByteArray(received,0,received.length);check(decoded!=null&&decoded.getWidth()==4&&decoded.getHeight()==3&&decoded.getPixel(0,0)==0xff00aaff,"PNG pixels and dimensions preserved");decoded.recycle();
             App.detail="Waiting for shared image";
-            Intent shareImage=new Intent(c,MainActivity.class).setAction(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM,imageUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent shareImage=new Intent(c,ShareActivity.class).setAction(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM,imageUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION);
             c.startActivity(shareImage);await("Share image round trip",()->App.detail.startsWith("Received image"));
             ClipData sensitive=ClipData.newPlainText("Private","do-not-send");PersistableBundle extras=new PersistableBundle();extras.putBoolean("android.content.extra.IS_SENSITIVE",true);sensitive.getDescription().setExtras(extras);
             boolean skipped=false;try{Clips.read(c,sensitive);}catch(Exception e){skipped=true;}check(skipped,"sensitive clipboard excluded");
@@ -59,6 +59,23 @@ public final class AndroidTests extends Instrumentation {
             foreground();await("background Mac to Android clipboard write",()->text().equals("mac:background"));
             // Observe Android's actual foreground read restriction with an unrelated app in focus.
             source("foreign:restriction");check(cb.getPrimaryClip()==null,"background clipboard read denied without default IME");
+            Intent resolved=new Intent(Intent.ACTION_SEND).setType("text/plain").setPackage(c.getPackageName());
+            check(c.getPackageManager().resolveActivity(resolved,0).activityInfo.name.equals("localclip.ShareActivity"),"share sheet resolves to transparent receiver");
+            ActivityMonitor receiver=addMonitor(ShareActivity.class.getName(),null,false);
+            Intent foreignShare=new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("share","test:background-share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            App.detail="Waiting for external text share";c.startActivity(foreignShare);
+            Activity handler=receiver.waitForActivityWithTimeout(5000);check(handler!=null,"external text share reaches receiver");
+            await("share receiver closes itself",()->handler.isFinishing()||handler.isDestroyed());
+            await("external text share delivers in background",()->App.detail.startsWith("Received text"));
+            check(!activity.hasWindowFocus()&&!App.focused,"sharing does not open MainActivity");
+            removeMonitor(receiver);
+            receiver=addMonitor(ShareActivity.class.getName(),null,false);
+            Intent foreignImage=new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("share","image").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            App.detail="Waiting for external image share";c.startActivity(foreignImage);
+            Activity imageHandler=receiver.waitForActivityWithTimeout(5000);check(imageHandler!=null,"external image share reaches receiver");
+            await("image share receiver closes after staging bytes",()->imageHandler.isFinishing()||imageHandler.isDestroyed());
+            await("private source URI image delivered after receiver closes",()->App.detail.startsWith("Received image"));
+            check(!activity.hasWindowFocus(),"external image share leaves main screen in background");removeMonitor(receiver);
             String defaultKeyboard=Settings.Secure.getString(c.getContentResolver(),Settings.Secure.DEFAULT_INPUT_METHOD);
             foreground();
             runOnMainSync(()->{activity.renderConnection();if(!activity.status.getText().toString().contains("Connected to Mac"))throw new AssertionError("Connected badge");});
@@ -69,8 +86,15 @@ public final class AndroidTests extends Instrumentation {
             runOnMainSync(()->{activity.renderConnection();if(!activity.status.getText().toString().contains("Disconnected"))throw new AssertionError("Disconnected badge");if(!activity.sendButton.getText().toString().equals("Connect & send clipboard"))throw new AssertionError("Offline send action");});
             check(true,"disconnected badge and reconnect send action");capture("disconnected");
             // Sharing while disconnected must reconnect and deliver without a second Send tap.
-            Intent reconnectShare=new Intent(c,MainActivity.class).setAction(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,"test:share-reconnect").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            c.startActivity(reconnectShare);await("Share automatically reconnects and delivers",()->text().equals("mac:test:share-reconnect"));
+            App.detail="Waiting for disconnected external share";
+            ActivityMonitor reconnectReceiver=addMonitor(ShareActivity.class.getName(),null,false);
+            Intent reconnectShare=new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("share","test:share-reconnect").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            c.startActivity(reconnectShare);Activity reconnectHandler=reconnectReceiver.waitForActivityWithTimeout(5000);
+            check(reconnectHandler!=null,"disconnected external share reaches receiver");
+            await("disconnected share receiver closes",()->reconnectHandler.isFinishing()||reconnectHandler.isDestroyed());
+            await("Share automatically reconnects and delivers in background",()->App.detail.startsWith("Received text"));
+            check(!activity.hasWindowFocus(),"reconnecting share leaves previous app in front");removeMonitor(reconnectReceiver);
+            foreground();check(text().equals("mac:test:share-reconnect"),"reconnected share applied exact text");
             // The main clipboard button does the same without changing the selected keyboard.
             runOnMainSync(()->c.stopService(new Intent(c,SyncService.class)));
             await("Second disconnect completed",()->App.service==null);
@@ -90,6 +114,11 @@ public final class AndroidTests extends Instrumentation {
             Config.forget(c);
             runOnMainSync(()->{activity.updatePeer();activity.renderConnection();if(!activity.status.getText().toString().contains("Pair with a Mac")||activity.pairingFields.getVisibility()!=android.view.View.VISIBLE)throw new AssertionError("Unpaired state");});
             check(true,"unpaired state exposes pairing without a connected badge");
+            ActivityMonitor unpairedReceiver=addMonitor(ShareActivity.class.getName(),null,false);
+            c.startActivity(new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("share","test:unpaired").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            Activity unpairedHandler=unpairedReceiver.waitForActivityWithTimeout(5000);check(unpairedHandler!=null,"unpaired share reaches receiver");
+            await("unpaired share closes without opening main screen",()->unpairedHandler.isFinishing()||unpairedHandler.isDestroyed());
+            check(!activity.hasWindowFocus()&&App.service==null,"unpaired share does not launch main or a connection");removeMonitor(unpairedReceiver);
             result.putString("stream","Android clipboard integration: "+assertions+" assertions passed on API "+Build.VERSION.SDK_INT+"\n");finish(Activity.RESULT_OK,result);
         }catch(Throwable e){result.putString("stream","FAIL "+e.toString()+"\n");finish(Activity.RESULT_CANCELED,result);}
     }

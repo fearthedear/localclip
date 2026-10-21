@@ -11,7 +11,16 @@ public final class App extends Application {
     static volatile SyncService service;
     static volatile boolean focused=false;
     static final ExecutorService contentWorker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(2),new ThreadPoolExecutor.AbortPolicy());
+    private static final java.util.Map<String,Wire.Message> handoffs=new java.util.HashMap<>();
     static final Handler main=new Handler(Looper.getMainLooper());
+    static void handoffShared(Context c,Wire.Message message)throws Exception{
+        String token=java.util.UUID.randomUUID().toString();
+        synchronized(handoffs){if(handoffs.size()>=2)throw new Exception("Sharing busy");handoffs.put(token,message);}
+        try{c.startForegroundService(new Intent(c,SyncService.class).setAction("localclip.SHARED").putExtra("handoff",token));}
+        catch(Exception e){takeShared(token);throw e;}
+        main.postDelayed(()->takeShared(token),30000);
+    }
+    static Wire.Message takeShared(String token){synchronized(handoffs){return handoffs.remove(token);}}
     static boolean unlocked(Context c) { return !((KeyguardManager)c.getSystemService(KEYGUARD_SERVICE)).isDeviceLocked(); }
     static boolean automatic(Context c) { return c.getSharedPreferences("settings",0).getBoolean("automatic",false); }
     static void send(Context context,ClipData clip,boolean explicit) {
