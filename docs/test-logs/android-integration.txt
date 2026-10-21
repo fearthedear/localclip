@@ -1,0 +1,35 @@
+PASS pairing Keystore save/load
+PASS invalid pairing rejected
+PASS LocalClip has focus
+PASS authenticated Mac connection
+PASS text round trip through OS clipboard
+PASS Share text round trip
+PASS selected text round trip
+PASS image round trip acknowledgement
+PASS received image uses PNG content URI
+PASS image provider exact PNG bytes
+PASS PNG pixels and dimensions preserved
+PASS Share image round trip
+PASS sensitive clipboard excluded
+PASS pairing code excluded from sync
+PASS image input limit
+PASS LocalClip has focus
+PASS background Mac to Android clipboard write
+PASS background clipboard read denied without default IME
+PASS LocalClip has focus
+PASS prominent connected badge after authentication
+s_glBindAttribLocation: bind attrib 0 name position
+s_glBindAttribLocation: bind attrib 1 name color
+s_glBindAttribLocation: bind attrib 2 name localCoord
+PASS Disconnect stops connection service
+PASS disconnected badge and reconnect send action
+PASS Share automatically reconnects and delivers
+PASS Second disconnect completed
+PASS clipboard button reconnects and delivers
+PASS selected keyboard remains unchanged
+PASS app does not register a replacement keyboard
+PASS focused automatic sending with normal keyboard
+PASS incoming clipboard echo suppressed
+PASS Disconnect before removing pairing
+PASS unpaired state exposes pairing without a connected badge
+Android clipboard integration: 31 assertions passed on API 34

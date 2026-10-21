@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.localclip.tests">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36"/>
+    <application android:label="LocalClip Test Fixture" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false">
+        <activity android:name="localclip.SourceActivity" android:exported="true" android:process=":source" android:launchMode="singleTop"/>
+    </application>
+    <instrumentation android:name="localclip.AndroidTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
+</manifest>

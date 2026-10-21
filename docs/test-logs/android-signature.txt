@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): false
+Verified using v3 scheme (APK Signature Scheme v3): true
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=LocalClip development
+Signer #1 certificate SHA-256 digest: ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98
+Signer #1 certificate SHA-1 digest: a175bcc74be56be13180d174e4b1b213c763d046
+Signer #1 certificate MD5 digest: 4f3a0b4469b0e1281836c51b08647212
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 3072
+Signer #1 public key SHA-256 digest: 9e6b29f62188cfceb248cc4922201d814252cbbaa29905c825e43df157e258a0
+Signer #1 public key SHA-1 digest: 23c0244c04f6e1364860667330c426a093a2cd68
+Signer #1 public key MD5 digest: b4ceeccdda4ece3323298bedba7e5261

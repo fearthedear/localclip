@@ -1,0 +1,5 @@
+Mac app clipboard integration: 7 assertions passed (named pasteboard; text and PNG in both directions, acknowledgements, automatic local send)
+PASS concealed pasteboard skipped
+READY Mac clipboard test
+PASS Mac text pasteboard applied
+PASS Mac PNG pasteboard applied

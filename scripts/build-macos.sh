@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DEST="${OUTPUT_DIR:-$ROOT/../macos}"
+TEMP="$(mktemp -d "${TMPDIR:-/tmp}/localclip-build.XXXXXX")"
+trap 'rm -rf "$TEMP"' EXIT
+APP="$TEMP/LocalClip.app"
+ARCH="${ARCH:-arm64}"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+swiftc -swift-version 5 -O -target "$ARCH-apple-macosx13.0" -framework AppKit -framework CryptoKit -framework Security -framework ImageIO "$ROOT/macos/Protocol.swift" "$ROOT/macos/Server.swift" "$ROOT/macos/App.swift" "$ROOT/macos/main.swift" -o "$APP/Contents/MacOS/LocalClip"
+cp "$ROOT/macos/Info.plist" "$APP/Contents/Info.plist"
+xattr -cr "$APP"
+codesign --force --sign - "$APP"
+codesign --verify --deep --strict --verbose=2 "$APP"
+ditto --noextattr --norsrc -c -k --keepParent "$APP" "$DEST/LocalClip-macOS-$ARCH.zip"
+rm -rf "$DEST/LocalClip.app"
+ditto --noextattr --norsrc "$APP" "$DEST/LocalClip.app"
+codesign --verify --deep --strict --verbose=2 "$DEST/LocalClip.app"
+echo "Built $DEST/LocalClip.app (ad-hoc signed; not notarized)"

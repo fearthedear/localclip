@@ -1,0 +1,8 @@
+.build/
+*.keystore
+*.jks
+*.apk
+*.class
+*.dex
+.DS_Store
+local.properties
