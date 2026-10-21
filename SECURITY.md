@@ -14,7 +14,7 @@ The listener binds all Mac IPv4/IPv6 interfaces on TCP 47391 while sharing is ac
 
 - Mac: Keychain generic password, service `localclip.peer`, account `pairing-key`, device-only after-first-unlock accessibility.
 - Android: a non-exportable Android Keystore AES-GCM wrapping key encrypts the stored pairing code in private preferences. App backups are disabled. Root/debugging access and an unlocked or compromised device are outside the secret-storage guarantee.
-- The key is in process memory while needed. Pairing input is password-masked, not autofill-enabled, and the Android window is protected from ordinary screenshots.
+- The key is in process memory while needed. Pairing input is password-masked, not autofill-enabled, and screenshots of the Android app are allowed.
 - Production code does not log clip contents, secrets, nonces, or authentication proofs. Test fixtures deliberately log their known synthetic data.
 
 ## Clipboard behavior
@@ -34,4 +34,6 @@ The listener binds all Mac IPv4/IPv6 interfaces on TCP 47391 while sharing is ac
 
 No external security audit, multi-peer identity management, perfect delivery under process death, durable delivery queue, remote wipe, or encrypted clipboard history. The Mac must be awake, and its global clipboard can be changed while the Mac app is running, including while the Mac is locked; only the Android lock state has an explicit receive gate. Network backoff and OS sleep restrictions may delay or interrupt sync. Consider whether copying sensitive text on either device is appropriate while automatic sharing is enabled.
 
-The optional research probe in `experiments/adb-clipboard` is not compiled into the APK, makes no network connections, and requires a separately ADB-started shell process. It is limited to the API 34 environment whose hidden signatures were inspected, logs only metadata, and is intended for synthetic emulator experiments. No ADB or Shizuku access is enabled by the installed app.
+The optional production helper in `adb-bridge` runs as ADB shell UID 2000. A fresh random bridge key in an app-private file bootstraps a mutually authenticated AES-GCM session on 127.0.0.1:47392; the authorized ADB launcher pipes that file through `run-as` on the debuggable APK. The Mac pairing key is never given to the helper. Other ordinary apps cannot read the file. Closing the channel deletes its bootstrap file; a restart rotates the key. Loopback authentication, encryption and bounds reuse the wire primitives, but local payload types differ to permit source-image conversion. No localhost listener is open unless the option and connection service are running. Availability against another local app repeatedly connecting is not guaranteed.
+
+The helper reads new copies only, honors sensitive/pairing exclusions, drops locked/offline copies, and ignores incoming LocalClip labels. Disabling the option or stopping sharing closes its session; the helper exits. Debugging authorization must be granted explicitly outside LocalClip and is privileged device access. The launcher requires this debug build's `run-as`; it will not work unchanged with a non-debuggable release. See [helper setup and limitations](docs/ADB-CLIPBOARD.md). The older read-only API 34 experiment remains separate and is not the shipped helper.

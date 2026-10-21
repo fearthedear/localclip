@@ -49,3 +49,11 @@ Unknown types, invalid UTF-8, invalid PNG signatures, malformed control bodies, 
 10-second heartbeat interval; 45-second idle receive timeout; Android connection/handshake timeout six seconds; Mac handshake timeout five seconds; Mac send timeout five seconds; Android stalled-write watchdog twelve seconds. Android reconnect backoff is 1, 2, 4, 8, then 15 seconds. There is no resumed session, durable queue, compression, or global clipboard ordering. Different copies arriving at the same time can overwrite each other. Message IDs correlate acknowledgements; content fingerprints prevent clipboard loops.
 
 The generic protocol tests intentionally accept PNG-signature payloads independently of image decoding. The platform integration tests separately verify real PNG decoding, dimensions, content URIs, and clipboard application. Protocol test servers use fixed public fixture keys and must never be used for actual clipboard sharing.
+
+## Optional ADB helper channel (0.3.0)
+
+This separate channel listens only on phone loopback `127.0.0.1:47392` while enabled. It uses an independent random 32-byte bridge key, rotated on listener start, and the same LC01 HMAC handshake, key derivation, AES-GCM framing and sequence enforcement. The debugging launcher supplies the app-private bridge key to the shell helper over stdin; it is not the Mac pairing secret. No plaintext clipboard frame is accepted.
+
+The local decrypted payload begins with one type byte and 16 reserved/random ID bytes, followed by a bounded body. Local types differ from Mac messages: `6` is the first helper frame, with a four-byte big-endian Android SDK integer; `1` carries UTF-8 text; `2` carries source image bytes for app-side validation/PNG conversion; `3` is an empty heartbeat; `5` is an empty source-read/size failure notice. The app returns encrypted type-4 empty control acknowledgements for processed frames. These local acknowledgements confirm processing of a helper event, not Mac delivery; the Mac connection's own acknowledgements update the Last transfer card.
+
+Source bodies are at most 8 MiB. Android image decoding also applies the existing 16-megapixel bound. A wrong key, authentication failure, malformed frame or heartbeat timeout closes the helper connection. The helper reads no preexisting clip at startup. See [helper setup and security](ADB-CLIPBOARD.md).

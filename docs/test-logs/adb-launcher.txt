@@ -1,0 +1,4 @@
+On the phone: Connect to Mac, then enable Automatic copying with Gboard.
+Starting the helper. Disable that option or disconnect LocalClip to stop it. Restart after a phone reboot.
+clipboard-bridge.jar: 1 file pushed, 0 skipped. 9.8 MB/s (9244 bytes in 0.001s)
+Automatic copying active on Android API 37. Keep your keyboard. No clipboard contents are logged.

@@ -1,65 +1,62 @@
-# Automatic clipboard syncing with Gboard: ADB / Shizuku investigation
+# Automatic copying with Gboard — LocalClip 0.3.0
 
-Investigated and experimentally checked on 21 October 2026. **An ADB-started helper is technically viable. It is not integrated into the v0.2.1 APK's automatic sending path.**
+**Implemented and tested on Android 17/API 37 with Gboard in an arm64 emulator.** A separate, rootless ADB shell helper listens for actual clipboard changes. Copying supported text or an image in another app sends it through LocalClip's encrypted Mac connection without Share or opening LocalClip. Gboard stays selected. This observes clipboard changes, not keyboard keystrokes.
 
-## What was actually observed
+The ordinary APK cannot read arbitrary background copies by itself. The helper is optional and requires explicit debugging authorization. Physical Pixel 11 Pro XL behavior, long idle/Doze and survival after unplugging USB remain unverified.
 
-On the dedicated Android 14/API 34 arm64 emulator, a separate Java process was launched by `adb shell app_process` as **UID 2000 (shell), not root**. The normal AOSP Latin keyboard stayed selected, another app remained the resumed/focused activity, and LocalClip's main Activity was in the background.
+## Setup on your phone and Mac
 
-The helper registered a real `ClipboardManager.OnPrimaryClipChangedListener`. After synthetic text copies made by that other app, it automatically received callbacks and read the text. After an image copy, it obtained the image URI through the clipboard API and read the complete 107-byte PNG through the private source provider. No Share action or keyboard switch was needed for these probe events.
+1. Install `LocalClip-debug.apk` 0.3.0 over the existing version. Pair and **Connect to Mac** as usual. The existing Mac app remains compatible.
+2. In Android LocalClip, enable **Allow automatic copying through the ADB helper**. Its status initially says **Waiting for ADB helper**.
+3. Extract `LocalClip-adb-bridge.zip` on the Mac. Keep its launcher, JAR and README together. Install Google's [SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools) if `adb` is not already installed. The launcher also finds Android Studio's usual Mac SDK location.
+4. For USB setup: enable **Developer options → USB debugging**, connect the phone, unlock it, and accept this Mac's debugging prompt. These are Android debugging permissions, separate from LocalClip pairing.
+5. Double-click **Start automatic copying.command** on the Mac. The Terminal should report **Automatic copying active on Android API 37**. The Android app independently shows **Automatic copying active** when the encrypted helper session is established.
+6. Return to another phone app, copy new text, and paste on the Mac. Copying an image works when the source app places a readable image URI on the clipboard. Taking a screenshot alone is not a copy; use the screenshot's Copy action or Share → LocalClip.
 
-Observed diagnostic output (lengths only; no clipboard contents):
+The launcher remains running in Terminal. Keep it open for this MVP. If macOS requires its normal approval to open the downloaded launcher, use the system's Open/Open Anyway flow. No macOS Accessibility or screen-recording permission is required.
 
-```
-PROBE_CONTEXT package=com.android.shell attribution=com.android.shell uid=2000
-READY shell clipboard listener; copy synthetic test text/image in another app
-EVENT 1 text-readable chars=13
-EVENT 2 text-readable chars=13
-EVENT 3 image-readable bytes=107
-```
+### Wireless debugging instead of USB
 
-The fixture caused two text events; this is not a throughput/latency benchmark. The helper only observes and reads; it does **not** send to the Mac or receive production pairing keys.
+On the same Wi-Fi, enable **Developer options → Wireless debugging → Pair using pairing code**. Use the displayed pairing address with `adb pair IP:PAIRING_PORT` and enter the phone's code. Verify the device appears in `adb devices`; if needed, use `adb connect IP:DEBUGGING_PORT` with the address shown on the main Wireless debugging screen. The two ports differ. Then run the same launcher. See Google's [ADB wireless setup](https://developer.android.com/tools/adb#wireless-android11-command-line).
 
-## Why this works
+Wireless debugging setup and reconnect behavior were documented from Google, but were not exercised on a physical phone. LocalClip's clipboard connection can independently use Wi-Fi or Tailscale; the helper runs locally on the phone and does not route clipboard data through ADB.
 
-Android's [clipboard service](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/services/core/java/com/android/server/clipboard/ClipboardService.java) explicitly allows callers holding `READ_CLIPBOARD_IN_BACKGROUND`, before applying ordinary focus restrictions. The [shell package](https://android.googlesource.com/platform/frameworks/base/+/android16-release/packages/Shell/AndroidManifest.xml) requests that permission; it was also checked as granted on the emulator. In Android 16's [permission declaration](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/core/res/AndroidManifest.xml), the protection level is `signature|role`. It is not a normal user-grantable clipboard runtime permission.
+### Stop and restart
 
-Running an ordinary APK foreground service does not give it the shell's identity. Changing a clipboard app-op alone does not remove the clipboard service's focus/privileged-permission gate. This APK still cannot read arbitrary background copies while Gboard is selected; the privileged helper is a separate requirement.
+- Disable the automatic-copying option, or tap **Disconnect / pause sharing** in LocalClip. The app closes the helper connection, deletes its temporary key file and the helper exits.
+- After a phone reboot, LocalClip force-stop, connection-service stop, or helper termination: open LocalClip, Connect, and run the launcher again. There is no boot auto-start.
+- Mac network loss does not require relaunching a still-connected helper: LocalClip retries the Mac connection. Copies made while offline or locked are dropped, not queued for later.
+- To revoke debugging itself, use Android's debugging settings to forget this Mac/revoke debugging authorizations.
 
-The observed approach is also consistent with the shell-side clipboard listener in [scrcpy's clipboard wrapper](https://github.com/Genymobile/scrcpy/blob/master/server/src/main/java/com/genymobile/scrcpy/wrappers/ClipboardManager.java) and its [shell context implementation](https://github.com/Genymobile/scrcpy/blob/master/server/src/main/java/com/genymobile/scrcpy/FakeContext.java). No scrcpy code or runtime dependency was bundled.
-
-## Important implementation findings
-
-A shell process is not a normal Android application process. A naïvely created context reported an `android` attribution instead of `com.android.shell`; that prevented useful background callbacks. Correct attribution to the process's actual shell UID/package enabled the callbacks.
-
-Images needed a separate check. The normal ContentResolver path first failed package attribution, then failed because ActivityManager could not find a registered application thread for the shell process. The tested probe instead uses the explicit external-content-provider API and shell attribution. Exact API 34 Binder method signatures were inspected on the running emulator before implementing the calls. The provider reference is released after the file is read.
-
-The probe fails fast outside API 34 rather than guessing hidden API signatures. A Pixel running another Android release needs its actual interfaces and behavior validated. Text and images were proved on this emulator; Pixel 11 Pro XL, Android 15/16/17 runtime, screen lock, Doze, process longevity, multi-user profiles and reboot recovery were not tested.
-
-## How this could become automatic LocalClip sync
-
-There are two plausible deployment routes:
-
-1. **An own-source ADB-started helper.** Launch it using an explicitly authorized USB/wireless-debugging connection, then feed clipboard events into a carefully authenticated local IPC channel to the APK. The APK can retain the pairing key and existing encrypted Mac transport. Add visible helper status, stop/revoke controls, sensitive-content filtering, bounded image reads, and echo suppression before shipping. The experiment does not yet implement that channel or auto-send.
-2. **Shizuku user service.** [Shizuku's API documentation](https://github.com/RikkaApps/Shizuku-API/blob/master/README.md) describes running user-service code as shell/root, and warns that many Context APIs do not behave like a normal app. On non-rooted devices, its backend must be started again after reboot; Android 11+ can use wireless debugging. This adds a separate open-source app/dependency and authorization flow. It was researched, not installed or tested here.
-
-A helper must be relaunched after reboot or process termination. One setup that lasts permanently through reboot without further privileges was not established. Keeping Gboard is compatible with the helper approach because it monitors **clipboard changes**, not keyboard keystrokes.
-
-## Reproduce only with synthetic data on an isolated API 34 emulator
-
-The probe source and build script are in `experiments/adb-clipboard/`. It has no network code and prints no raw clipboard contents, URI paths, or hashes. It skips sensitive-marked clips and caps image reads at 8 MiB.
+For multiple attached devices, select explicitly from Terminal:
 
 ```sh
-experiments/adb-clipboard/build-probe.sh
-adb -s emulator-5554 push .build/adb-probe/clipboard-probe.jar /data/local/tmp/localclip-probe.jar
-adb -s emulator-5554 shell 'CLASSPATH=/data/local/tmp/localclip-probe.jar app_process /system/bin localclip.probe.ClipboardProbe'
+ANDROID_SERIAL=YOUR_DEVICE_SERIAL './Start automatic copying.command'
 ```
 
-With the synthetic test fixture installed, another terminal can cause a copy in the source app:
+`ADB=/absolute/path/to/adb` selects a nonstandard Platform Tools installation. Only the main Android user (0) is supported; work profiles and secondary users are excluded. The helper requires Android 14/API 34 or newer and checks its required hidden interfaces at startup. The integrated path was validated on API 37; other Android builds can change these interfaces.
+
+## Implementation and authentication
+
+The APK listens only on **127.0.0.1:47392**, while the option and connection service are running. Each listener start creates an independent, random 256-bit bridge key in an app-private file. The authorized ADB launcher pipes that file to the shell helper using `run-as` on this **debuggable development APK**. It does not print the key or put it in command arguments, and it never reads the Mac pairing key. A non-debuggable production APK would need a different bootstrap mechanism; this launcher deliberately requires the supplied debug build.
+
+The app and helper mutually authenticate with fresh nonce/HMAC proofs and encrypt every local frame with AES-256-GCM, reusing the tested framing primitives with the separate bridge key. The normal Mac connection retains its own independent pairing secret and encryption. Other ordinary apps cannot read LocalClip's private bootstrap file; a wrong key is rejected before clipboard events are accepted. Authorized debugging access is privileged access to the device.
+
+An initial Unix-domain socket design was rejected during API 37 runtime testing: SELinux denied shell-to-app `connectto`. The shipped design uses authenticated encrypted loopback TCP and requires no SELinux changes, root, replacement keyboard, Accessibility service, Shizuku installation or added APK permissions.
+
+The helper reads only new clipboard-change events, skips `IS_SENSITIVE` and `localclip1:` pairing codes, ignores LocalClip-labeled incoming clips to prevent loops, and does not log clipboard contents, hashes or URI paths. A small bounded worker queue drops excess bursts. Encoded inputs are capped at 8 MiB; the app validates images, caps them at 16 megapixels, and converts to PNG. Shell image reads use Android's external provider API with correct shell attribution and release the provider reference afterward.
+
+For primary platform context, Android's [clipboard service](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android16-release/services/core/java/com/android/server/clipboard/ClipboardService.java) exempts privileged background readers before applying ordinary focus restrictions; the [shell package](https://android.googlesource.com/platform/frameworks/base/+/android16-release/packages/Shell/AndroidManifest.xml) requests `READ_CLIPBOARD_IN_BACKGROUND`. It is a privileged permission, not one an ordinary APK can request at runtime. Exact interface lookup and actual background text/image delivery were tested on API 37. The earlier API 34 read-only probe remains in `experiments/adb-clipboard` for historical reproduction; the production helper is in `adb-bridge`.
+
+## Build and reproduce
 
 ```sh
-adb -s emulator-5554 shell am start -n org.localclip.tests/localclip.SourceActivity --es text adb-auto-text
-adb -s emulator-5554 shell am start -n org.localclip.tests/localclip.SourceActivity --ez copyImage true
+./scripts/build-android.sh
+./scripts/build-adb-bridge.sh
+./scripts/build-android-tests.sh
+adb push ../adb-bridge/clipboard-bridge.jar /data/local/tmp/localclip-bridge.jar
+# Start the synthetic Swift AndroidTestServer as described in README, install both APKs:
+adb shell am instrument -w org.localclip.tests/localclip.BridgeTests
 ```
 
-The process runs in the foreground of that debugging session. Stop it with the session or kill its specific shell-process PID after the experiment. No developer settings were enabled or permissions changed on a physical phone during this work.
+Use a disposable emulator. Tests configure a public test pairing key and remove it afterward; never point the test APK at a production clipboard. See `docs/TEST-RESULTS.md` for the checks and limits.

@@ -1,0 +1,35 @@
+PASS main ready
+PASS encrypted Mac connection
+PASS bridge waiting for shell
+PASS independent temporary bridge key created
+PASS wrong helper key rejected before clipboard events
+READY_EXTERNAL_HELPER
+PASS shell helper authenticated and active
+PASS helper does not read existing clipboard on startup
+PASS background copy delivered without Share
+PASS copying leaves source app in front
+PASS main screen focus
+PASS exact Unicode text round trip
+PASS recopying identical text sends a new event
+PASS sensitive-marked background copy skipped
+PASS pairing code background copy skipped
+PASS private-provider image copy automatically delivered
+PASS image copy requires no foreground LocalClip screen
+PASS main screen focus
+PASS automatic image pixels survive Mac round trip
+PASS incoming Mac clipboard does not echo back through helper
+PASS selected keyboard unchanged by helper: com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+PASS LocalClip screenshots permitted
+PASS LocalClip screenshot captured
+PASS LocalClip screenshot contains visible screen pixels
+PASS full LocalClip screenshot round trip
+PASS full screenshot dimensions preserved
+PASS Mac round-trip screenshot is not black
+PASS disable option closes helper channel
+PASS disabling deletes the temporary bridge key
+PASS no automatic sending after disabling helper
+PASS reenabling waits for explicit helper restart
+PASS restarting rotates the bridge key
+PASS helper restart connects
+PASS Disconnect stops network and helper channel
+ADB bridge integration: 33 assertions passed on API 37

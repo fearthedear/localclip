@@ -27,11 +27,10 @@ PASS private source URI image delivered after receiver closes
 PASS external image share leaves main screen in background
 PASS LocalClip has focus
 PASS prominent connected badge after authentication
-s_glBindAttribLocation: bind attrib 0 name position
-s_glBindAttribLocation: bind attrib 1 name color
-s_glBindAttribLocation: bind attrib 2 name localCoord
+PASS main screen permits screenshots
 PASS Disconnect stops connection service
 PASS disconnected badge and reconnect send action
+PASS main screen permits screenshots
 PASS disconnected external share reaches receiver
 PASS disconnected share receiver closes
 PASS Share automatically reconnects and delivers in background
@@ -49,4 +48,4 @@ PASS unpaired state exposes pairing without a connected badge
 PASS unpaired share reaches receiver
 PASS unpaired share closes without opening main screen
 PASS unpaired share does not launch main or a connection
-Android clipboard integration: 48 assertions passed on API 34
+Android clipboard integration: 50 assertions passed on API 37

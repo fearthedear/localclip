@@ -14,7 +14,7 @@ import android.widget.*;
 
 public final class MainActivity extends Activity {
     static final int BLUE=0xff2458da, INK=0xff182237, MUTED=0xff526078;
-    TextView status,detail,peer,connectionHelp;EditText pairing;CheckBox auto;
+    TextView status,detail,peer,connectionHelp;EditText pairing;CheckBox auto;TextView bridgeStatus;
     Button connectionButton,sendButton,pairToggle;
     LinearLayout pairingFields;
     final Handler handler=new Handler(Looper.getMainLooper());
@@ -24,11 +24,11 @@ public final class MainActivity extends Activity {
     final Runnable refresh=new Runnable(){public void run(){
         if(shared!=null&&SystemClock.elapsedRealtime()-sharedAt>30000){shared=null;App.detail="Shared item expired. Share it to LocalClip again.";}
         if(shared!=null&&hasWindowFocus()&&isConnected()){ClipData clip=shared;shared=null;App.send(MainActivity.this,clip,true);}
-        renderConnection();detail.setText(App.detail);handler.postDelayed(this,400);
+        renderConnection();bridgeStatus.setText(AdbBridge.active&&!isConnected()?"Helper active · Mac offline; copies are not queued":AdbBridge.enabled(MainActivity.this)&&App.service==null?"Connect to Mac, then start the ADB helper":AdbBridge.state);bridgeStatus.setTextColor(AdbBridge.active&&isConnected()?0xff137447:MUTED);detail.setText(App.detail);handler.postDelayed(this,400);
     }};
     boolean isConnected(){SyncService s=App.service;return s!=null&&s.connected();}
     @Override public void onCreate(Bundle b){
-        super.onCreate(b);getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,WindowManager.LayoutParams.FLAG_SECURE);
+        super.onCreate(b);
         getWindow().setStatusBarColor(0xfff3f5fa);getWindow().setNavigationBarColor(0xfff3f5fa);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(0xfff3f5fa);
@@ -46,15 +46,22 @@ public final class MainActivity extends Activity {
         },false);
 
         LinearLayout sending=card(root);
-        label(sending,"Send to your Mac",21).setTypeface(null,Typeface.BOLD);
+        label(sending,"Send manually",21).setTypeface(null,Typeface.BOLD);
         label(sending,"Copy text or an image in any app. Open LocalClip, then tap the blue button below. Gboard can stay selected.",15);
         sendButton=button(sending,"Send clipboard to Mac",this::sendClipboard,true);
         button(sending,"Choose a photo to send",()->{Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(i,10);},false);
         label(sending,"Or send directly from another app",16).setTypeface(null,Typeface.BOLD);
         label(sending,"1. Select text or open a photo.\n2. Tap Share (not just Copy).\n3. Choose LocalClip in the Android share sheet.\n\nSharing sends in the background and returns to your previous app. You can also use Share on Android’s clipboard popup after copying. If no Share action is available, use Copy and the blue button above.",15);
         auto=new CheckBox(this);auto.setText("Send new clipboard changes while LocalClip is open");auto.setTextColor(INK);auto.setChecked(App.automatic(this));auto.setOnCheckedChangeListener((v,checked)->getSharedPreferences("settings",0).edit().putBoolean("automatic",checked).apply());sending.addView(auto);
-        label(sending,"Android allows clipboard reading while LocalClip is on screen. With Gboard, it cannot automatically read copies made in the background.",13).setTextColor(MUTED);
+        label(sending,"Without the optional ADB helper, Android allows clipboard reading only while LocalClip is on screen.",13).setTextColor(MUTED);
+        LinearLayout bridgeCard=card(root);
+        label(bridgeCard,"Automatic copying with Gboard",21).setTypeface(null,Typeface.BOLD);
+        CheckBox bridge=new CheckBox(this);bridge.setText("Allow automatic copying through the ADB helper");bridge.setTextColor(INK);bridge.setChecked(AdbBridge.enabled(this));bridge.setEnabled(Build.VERSION.SDK_INT>=34);bridgeCard.addView(bridge);
+        bridgeStatus=label(bridgeCard,AdbBridge.state,15);bridgeStatus.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        label(bridgeCard,"1. Connect to your Mac above.\n2. Enable this option.\n3. On your Mac, run Start automatic copying.command from the ADB bridge folder.\n\nRequires USB or wireless debugging for setup. Copying then sends automatically while connected and unlocked, with Gboard still selected. Restart the helper after a phone reboot or disconnecting LocalClip. Sensitive-marked items and pairing codes are skipped.",14).setTextColor(MUTED);
+        bridge.setOnCheckedChangeListener((v,checked)->{getSharedPreferences("settings",0).edit().putBoolean("adbBridge",checked).apply();SyncService service=App.service;if(service!=null)service.refreshBridge();else AdbBridge.state=checked?"Connect to Mac, then start the ADB helper":"Automatic copying off";});
 
+        root.removeView(bridgeCard);root.addView(bridgeCard,3);
         LinearLayout transfer=card(root);
         label(transfer,"Last transfer",16).setTypeface(null,Typeface.BOLD);detail=label(transfer,App.detail,15);detail.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
 
@@ -72,9 +79,9 @@ public final class MainActivity extends Activity {
             shared=null;stopService(new Intent(this,SyncService.class));
             try{Config.forget(this);App.lastDigest="";updatePeer();App.detail="Pairing removed. Pair with a Mac to send again.";}catch(Exception e){App.detail="Could not remove pairing";}
         },false);
-        label(root,"Mac → Android arrives automatically while connected and unlocked. Keep the connection notification running and the Mac awake. No cloud or telemetry. Images: up to 8 MiB / 16 megapixels; pasting depends on the destination app. Build 0.2.1.",13).setTextColor(MUTED);
+        label(root,"Mac → Android arrives automatically while connected and unlocked. Keep the connection notification running and the Mac awake. No cloud or telemetry. Images: up to 8 MiB / 16 megapixels; pasting depends on the destination app. Build 0.3.0.",13).setTextColor(MUTED);
         clipboard=(ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
-        listener=()->{if(hasWindowFocus()&&App.automatic(this)&&isConnected())App.send(this,clipboard.getPrimaryClip(),false);};
+        listener=()->{if(hasWindowFocus()&&!AdbBridge.active&&App.automatic(this)&&isConnected())App.send(this,clipboard.getPrimaryClip(),false);};
         updatePeer();handleIntent(getIntent());renderConnection();
     }
     int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
@@ -91,7 +98,7 @@ public final class MainActivity extends Activity {
         boolean checking=connected&&service.responseAgeMillis()>25000;
         String title,help;int color;
         if(config==null){title="○  Pair with a Mac";help="Add your Mac pairing code below to get started.";color=MUTED;}
-        else if(connected&&!checking){title="●  Connected to Mac";color=0xff137447;help="Encrypted connection · Last Mac response "+service.responseAgeMillis()/1000+"s ago.\nMac copies arrive automatically. Send from Android below.";}
+        else if(connected&&!checking){title="●  Connected to Mac";color=0xff137447;help="Encrypted connection · Last Mac response "+service.responseAgeMillis()/1000+"s ago.\nMac copies arrive automatically. Use automatic copying or send manually below.";}
         else if(checking){title="◌  Checking connection…";color=0xff9b6500;help="No recent Mac response. Keep both devices online; LocalClip will reconnect if needed.";}
         else if(service==null){title="○  Disconnected";color=0xffa72a35;help="No clipboard is being shared. Tap Connect to Mac, or send an item to reconnect.";}
         else if(App.phase==App.Phase.PAIRING_REJECTED){title="!  Pairing rejected";color=0xffa72a35;help="Disconnect, then copy and save a fresh pairing code from your Mac.";}

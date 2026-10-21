@@ -2,18 +2,23 @@
 
 A small, MIT-licensed clipboard companion for macOS and Android. Text and images move directly between your devices over an authenticated, encrypted connection. No hosted backend, account, analytics, ads, or runtime third-party libraries. Local Wi-Fi works on its own; Tailscale is optional.
 
-**Keep Gboard.** LocalClip does not install or ask you to switch to another keyboard. Android requires an explicit Share action or a focused app to read clipboard content; automatic background sending with Gboard is not available.
+**Keep Gboard.** LocalClip does not install or ask you to switch to another keyboard. Optional automatic background copying uses an own-source, rootless ADB helper. Without the helper, use Share or the focused Send button.
 
 ## Downloads
 
 [Download the latest release](https://github.com/fearthedear/localclip/releases/latest):
 
 - `LocalClip-debug.apk`: Android 10/API 29 or later, target API 36; signed with a development key, debug-installable.
+- `LocalClip-adb-bridge.zip`: optional Gboard-compatible automatic-copy helper, Mac launcher and setup instructions. Requires Android 14+ and authorized USB/wireless debugging; tested on Android 17/API 37.
 - `LocalClip-macOS-arm64.zip`: Apple silicon, macOS 13 or later; ad-hoc signed, not notarized. Extract it and move `LocalClip.app` into Applications.
 
-Version 0.2.1 adds background sharing from Android’s clipboard popup or any app’s Share action. Install it over 0.1.0 or 0.2.0 to preserve pairing; the signing certificate and wire protocol are unchanged. Your existing Mac app remains compatible.
+Version 0.3.0 adds automatic background copying through the optional ADB helper and permits screenshots of LocalClip itself. Install over earlier versions to preserve pairing; the signing certificate and Mac wire protocol are unchanged. Your existing Mac app remains compatible.
 
 ## Send from Android while using Gboard
+
+### Automatic copying (optional ADB setup)
+
+In LocalClip, Connect to Mac and enable **Allow automatic copying through the ADB helper**. With an authorized USB/wireless debugging connection, extract `LocalClip-adb-bridge.zip` on the Mac and run **Start automatic copying.command**. Once the app says **Automatic copying active**, copies in other apps send automatically with Gboard still selected. Relaunch after a phone reboot or service stop. See the [complete setup and limitations](docs/ADB-CLIPBOARD.md).
 
 ### Copy, then send
 
@@ -66,7 +71,8 @@ Treat the pairing code like a password and replace it in both devices' clipboard
 | Feature | Behavior |
 |---|---|
 | Mac → Android | New Mac copies arrive automatically while Mac sharing and Android's connection service are running and the phone is unlocked. |
-| Android → Mac with Gboard | Explicit Share, selected-text action, or the focused Send clipboard button. The app never changes the selected keyboard. |
+| Android → Mac with Gboard | Automatic new copies with the optional ADB helper; otherwise explicit Share, selected-text action, or focused Send clipboard button. The selected keyboard stays unchanged. |
+| Optional ADB helper | Separate shell process, encrypted loopback channel, explicit debugging authorization. API 37/Gboard emulator tested. Restart after reboot/service stop. Main user only; hidden APIs can change. |
 | Focused automatic sending | Optional checkbox sends new clipboard changes while LocalClip is on screen. Opening the app alone does not upload the existing clipboard. |
 | Images | PNG on the wire; max 8 MiB and 16 megapixels. Android can share/choose other decodable formats and converts them to PNG. Mac PNG/TIFF clipboard images are supported. Pasting depends on the destination app. |
 | Disconnected explicit send | A share can wait in the foreground service for up to 30 seconds after its receiver closes. In-app clipboard/photo actions wait in the main screen while it has focus. No persistent queue; an unavailable Mac requires sharing again after expiry. |
@@ -104,9 +110,10 @@ Android: JDK 17+ (built with Temurin 21), SDK platform 36, Build Tools 36.0.0:
 ```sh
 export ANDROID_HOME="$HOME/Library/Android/sdk"
 ./scripts/build-android.sh
+./scripts/build-adb-bridge.sh
 ```
 
-Default outputs are `../macos` and `../android`; `.build` holds intermediates. Override with `OUTPUT_DIR` and `BUILD_DIR`. Mac signing/archive creation happens in a temporary directory because file-provider metadata can interfere with `.app` signatures in synced folders. Prefer the supplied clean ZIP for installation.
+Default outputs are `../macos`, `../android` and `../adb-bridge`; `.build` holds intermediates. Override with `OUTPUT_DIR` and `BUILD_DIR`. Mac signing/archive creation happens in a temporary directory because file-provider metadata can interfere with `.app` signatures in synced folders. Prefer the supplied clean ZIP for installation.
 
 The Android build creates a local development key at `.build/android/debug.keystore`, password `android`. Keep your key privately for compatible subsequent updates. A different signing key requires uninstall/reinstall, removing pairing. The supplied APK's private signing key is not published. The APK is debuggable and is not a Play Store release. Mac rebuilds may prompt for Keychain access again because signing is ad-hoc.
 
@@ -131,10 +138,14 @@ adb install -r ../android/LocalClip-debug.apk
 adb install -r .build/android/LocalClip-tests.apk
 adb shell pm grant org.localclip.android android.permission.POST_NOTIFICATIONS
 adb shell am instrument -w org.localclip.tests/localclip.AndroidTests
+# Optional helper integration tests:
+./scripts/build-adb-bridge.sh
+adb push ../adb-bridge/clipboard-bridge.jar /data/local/tmp/localclip-bridge.jar
+adb shell am instrument -w org.localclip.tests/localclip.BridgeTests
 ```
 
-The emulator test peer is `10.0.2.2:47493`. Stop it after testing. The test setup selects the emulator's built-in Latin keyboard before the tests; app operations then leave it unchanged. UI screenshots are captured only by instrumentation, temporarily clearing FLAG_SECURE and restoring it; production continues to protect the app window. Test APKs and fixed fixture keys are never used for actual clipboard sharing.
+The emulator test peer is `10.0.2.2:47493`. Stop it after testing. The tests leave the selected keyboard unchanged. The API 37 emulator uses Gboard. LocalClip's main window permits screenshots; the tests verify visible pixels before and after a full screenshot round trip. Test APKs and fixed fixture keys are never used for actual clipboard sharing.
 
-For automatic background sending with Gboard, see the [ADB/Shizuku research and tested prototype](docs/ADB-CLIPBOARD.md). The APK does not yet include this integration; the experiment is outside the APK.
+For automatic background sending with Gboard, see [ADB helper setup, architecture and tests](docs/ADB-CLIPBOARD.md). The separate helper JAR must be launched through ADB; installing the APK alone does not grant background clipboard access.
 
-See [test results](docs/TEST-RESULTS.md), [security notes](SECURITY.md), [wire protocol](docs/PROTOCOL.md), and [platform investigation](docs/PLATFORM-NOTES.md). There is no independent security audit or forward secrecy. The user reports the initial build works on their devices; the automated checks ran on an API 34 emulator, and do not certify every Pixel OS build.
+See [test results](docs/TEST-RESULTS.md), [security notes](SECURITY.md), [wire protocol](docs/PROTOCOL.md), and [platform investigation](docs/PLATFORM-NOTES.md). There is no independent security audit or forward secrecy. The user reports the initial build works on their devices; the current automated checks ran on Android 17/API 37 with Gboard, and do not certify every physical Pixel OS build.

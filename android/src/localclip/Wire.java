@@ -77,4 +77,12 @@ public final class Wire {
         if(!MessageDigest.isEqual(read(in,32),mac(secret,"server",server,client))) throw new GeneralSecurityException("Peer authentication failed");
         return new Session(new Frames(mac(secret,"c2s",server,client)),new Frames(mac(secret,"s2c",server,client)));
     }
+    public static Session server(InputStream in, OutputStream out, byte[] secret) throws Exception {
+        byte[] server=random(32);out.write(concat(MAGIC,server));out.flush();
+        byte[] client=read(in,32),proof=read(in,32);
+        if(!MessageDigest.isEqual(proof,mac(secret,"client",server,client)))throw new GeneralSecurityException("Peer authentication failed");
+        out.write(mac(secret,"server",server,client));out.flush();
+        return new Session(new Frames(mac(secret,"s2c",server,client)),new Frames(mac(secret,"c2s",server,client)));
+    }
+
 }

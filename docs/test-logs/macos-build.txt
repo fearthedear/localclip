@@ -1,0 +1,6 @@
+/var/folders/rk/05z64tnj5pd_qx4s3nz3pqqh0000gn/T//localclip-build.6FFN2n/LocalClip.app: replacing existing signature
+/var/folders/rk/05z64tnj5pd_qx4s3nz3pqqh0000gn/T//localclip-build.6FFN2n/LocalClip.app: valid on disk
+/var/folders/rk/05z64tnj5pd_qx4s3nz3pqqh0000gn/T//localclip-build.6FFN2n/LocalClip.app: satisfies its Designated Requirement
+/Users/linuskinzel/Documents/Codex/2026-10-21/referenced-chatgpt-conversation-this-is-an-3/outputs/LocalClip/source/../macos/LocalClip.app: valid on disk
+/Users/linuskinzel/Documents/Codex/2026-10-21/referenced-chatgpt-conversation-this-is-an-3/outputs/LocalClip/source/../macos/LocalClip.app: satisfies its Designated Requirement
+Built /Users/linuskinzel/Documents/Codex/2026-10-21/referenced-chatgpt-conversation-this-is-an-3/outputs/LocalClip/source/../macos/LocalClip.app (ad-hoc signed; not notarized)

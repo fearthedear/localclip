@@ -15,5 +15,6 @@ public final class SourceActivity extends Activity {
         else share.setType("text/plain").putExtra(Intent.EXTRA_TEXT,command);
         startActivity(share);
     }
-    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused){String value=getIntent().getStringExtra("text");if(value!=null)new Handler(Looper.getMainLooper()).postDelayed(()->((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("Source fixture",value)),350);}}
+    @Override public void onWindowFocusChanged(boolean focused){super.onWindowFocusChanged(focused);if(focused){String value=getIntent().getStringExtra("text");if(value!=null){getIntent().removeExtra("text");new Handler(Looper.getMainLooper()).postDelayed(()->((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(makeClip(value)),350);}}}
+    ClipData makeClip(String value){ClipData clip=ClipData.newPlainText("Source fixture",value);if(getIntent().getBooleanExtra("sensitive",false)){PersistableBundle extras=new PersistableBundle();extras.putBoolean("android.content.extra.IS_SENSITIVE",true);clip.getDescription().setExtras(extras);}return clip;}
 }

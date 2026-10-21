@@ -1,3 +1,5 @@
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
 Verifies
 Verified using v1 scheme (JAR signing): false
 Verified using v2 scheme (APK Signature Scheme v2): false
@@ -15,3 +17,4 @@ Signer #1 key size (bits): 3072
 Signer #1 public key SHA-256 digest: 9e6b29f62188cfceb248cc4922201d814252cbbaa29905c825e43df157e258a0
 Signer #1 public key SHA-1 digest: 23c0244c04f6e1364860667330c426a093a2cd68
 Signer #1 public key MD5 digest: b4ceeccdda4ece3323298bedba7e5261
+Built /Users/linuskinzel/Documents/Codex/2026-10-21/referenced-chatgpt-conversation-this-is-an-3/outputs/LocalClip/source/../android/LocalClip-debug.apk

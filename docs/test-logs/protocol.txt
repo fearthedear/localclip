@@ -1,4 +1,4 @@
 Java protocol tests: 18 passed
 Swift protocol tests: 18 passed
 Listener start/pause/restart: 30 cycles passed
-Java ↔ Swift TCP integration: 116 assertions passed, 0.23s including 8 MiB payload, Unicode, PNG, fragmentation, replay, tamper, oversize, wrong secret and reconnect
+Java ↔ Swift TCP integration: 116 assertions passed, 0.24s including 8 MiB payload, Unicode, PNG, fragmentation, replay, tamper, oversize, wrong secret and reconnect

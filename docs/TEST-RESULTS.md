@@ -1,52 +1,58 @@
-# LocalClip Android 0.2.1 — background Share patch and ADB research
+# LocalClip 0.3.0 — automatic Gboard copying and screenshot fix
 
-Checked on 21 October 2026 (Asia/Kuala_Lumpur). Repository: https://github.com/fearthedear/localclip
+Checked 21 October 2026 (Asia/Kuala_Lumpur). Repository: https://github.com/fearthedear/localclip
 
-## Implemented in the APK
+## What changed
 
-Android's clipboard-popup **Share → LocalClip**, app Share actions and selected-text actions resolve to a transparent `ShareActivity`, rather than the main screen. The receiver reads and converts the explicitly shared payload while its temporary image URI grant is valid, hands bounded bytes to the foreground service, and finishes. It is excluded from Recents, has no main-app UI or launch preview, and leaves the previous app visible.
+- Optional, own-source ADB helper automatically sends new text and image copies while Gboard stays selected and another app remains in front. It runs as shell UID 2000, without root or a replacement keyboard.
+- The APK and helper use a separate, mutually authenticated AES-256-GCM loopback session. The authorized launcher pipes a temporary app-private key through `run-as`; the Mac pairing secret stays in the APK. Disabling or stopping sharing closes the channel and deletes the temporary key. Restarting rotates it.
+- Android's automatic-copying card shows waiting/active status independently of the Mac connection. Manual background Share remains available.
+- LocalClip's main window allows screenshots. The prior main-window FLAG_SECURE protection caused black screenshots before any transfer. A full LocalClip screenshot now retains visible pixels through image conversion and the Mac round trip. The transparent, short-lived Share receiver still uses a secure window.
 
-The service sends while connected, or retains one explicit share in memory for up to 30 seconds while reconnecting. New pending shares replace older ones. Delivery/failure is reported in the connection notification. An unpaired phone receives a short Toast asking it to pair first; the main screen is not opened automatically. Android still briefly launches a share-target Activity; there is no claim of zero Activity lifecycle/focus transition.
+## Android 17 / Gboard results
 
-## Android regression results
+Official Android 17/API 37 arm64 Google APIs image, revision 6, fingerprint:
 
-**48 assertions passed** on the isolated Android 14/API 34 arm64 emulator, including:
+`google/sdk_gphone64_arm64/emu64a:17/CE2A.260420.019/15611780:userdebug/dev-keys`
 
-- Keystore pairing, invalid-code rejection, authenticated connection, Unicode clipboard round trip.
-- Text Share, selected text, image Share, PNG URI/MIME, exact bytes and decoded pixels.
-- Sensitive/pairing-code exclusions and image size cap.
-- Mac-to-phone writing while another app has focus; ordinary background reads remain denied.
-- Actual intent-filter resolution to the transparent receiver.
-- Text shared from a separate application: receiver closes, data arrives, main screen stays in the background.
-- Image shared from a separate application's **non-exported provider**, with an explicit temporary URI grant: bytes are staged, receiver closes, service delivers afterward, and the main screen remains in the background.
-- Disconnected Share from another app starts/reconnects the service, closes the receiver and delivers while the previous app stays in front. The exact returned text was then checked explicitly.
-- Connected, disconnected and unpaired indicators, and the in-app reconnect/send action.
-- Selected keyboard unchanged; no replacement IME registered; focused automatic sending and echo suppression.
-- Unpaired Share closes without opening the main screen or starting a connection.
+Gboard stayed selected: `com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME`.
 
-Tests used AOSP's normal Latin keyboard, not Gboard-specific APIs. The actual Pixel clipboard-popup interaction was not re-tested on physical hardware. The production window remains FLAG_SECURE; test-only UI screenshots temporarily clear and restore it.
+**33 helper integration assertions passed** through the real Swift test peer, including:
 
-The unchanged transport/Mac sources retain their earlier passing suites: 18 Java tests, 18 Swift tests, 116 Java↔Swift TCP assertions, 30 listener restart cycles and Mac private-pasteboard integration (7 peer assertions plus local checks). The sharing patch was validated through the real Swift peer and Android platform integration above; these earlier pure-protocol suites were not repeated solely for the UI/dispatch patch.
+- A new independent bridge key exists; a wrong key fails authentication.
+- The packaged Mac launcher starts the helper; the app independently confirms its authenticated session.
+- No existing clipboard is read/sent when starting the helper.
+- A new Unicode copy from another application reaches the Mac, with exact echoed contents and the source application remaining in front. Copying identical text again sends another event.
+- Sensitive-marked text and pairing codes are skipped.
+- An image URI from a non-exported source provider is read by the shell helper and automatically delivered; decoded PNG dimensions and pixels survive the Mac round trip.
+- Mac-to-phone updates do not loop back through the helper; the selected keyboard remains unchanged.
+- LocalClip screenshots are permitted, contain visible pixels, and remain non-black with unchanged dimensions after a full image round trip.
+- Disabling closes the helper channel, deletes its temporary key and stops further sends. Reenabling waits for an explicit restart; the new key differs. Disconnect stops both network and helper channel.
 
-## ADB experiment: observed, not integrated
+The **packaged `.command` launcher** was run against the test emulator, rather than only exercising a test-specific shell launch. It reported API 37 active and exited successfully when the option was disabled. The helper contains no clipboard-content/URI/hash logging.
 
-A separately launched process ran as **ADB shell UID 2000, not root**, with the normal keyboard still selected and the source app in front. It automatically received clipboard-change callbacks and read synthetic text, then read a complete 107-byte PNG from the private source provider after an image copy. No Share action was used for those probe events.
+**50 Android regression assertions passed** on API 37, covering Keystore pairing, invalid pairing, text/image/selected-text Share, exact PNG bytes and pixels, sensitive/size exclusions, ordinary background-read denial, background Mac clipboard writes, transparent external text/image shares, reconnect-and-send, connected/disconnected/unpaired indicators, normal keyboard retention, focused automatic sending and echo prevention. LocalClip screenshots were captured without clearing a production security flag. These regression checks preceded the final layout-only move of the automatic-copying card above manual sending; the 33 helper checks, including UI screenshot verification, were rerun against the final APK.
 
-The final probe logs contain only metadata, not raw clipboard contents. The final source compiled and was run again after the attribution/provider fixes. This demonstrates the access mechanism on API 34; **it does not send to the Mac**, and the APK does not enable ADB or Shizuku or include the helper. Hidden Binder signatures were inspected on the emulator and the research code refuses other API levels. Pixel OS variants, reboot/Doze longevity and an authenticated helper-to-app handoff still need engineering and validation before auto-sync can ship.
+## Mac and protocol verification
 
-See [ADB investigation](https://github.com/fearthedear/localclip/blob/main/docs/ADB-CLIPBOARD.md) for primary Android/Shizuku sources, errors encountered, tested provider access, source code and reproduction instructions. The normal APK still cannot read arbitrary background copies with Gboard selected.
+Rerun successfully on this source:
+
+- Java protocol: **18 tests**.
+- Swift protocol: **18 tests**.
+- Java ↔ Swift TCP: **116 assertions**, including Unicode, PNG, 8 MiB payload, fragmented frames, tamper/replay/oversize rejection, wrong secret and reconnect.
+- Mac listener start/pause/restart: **30 cycles**.
+- Mac private-pasteboard integration: **7 peer assertions plus local checks**, including actual text/PNG clipboard methods and automatic sending. The user's general Mac clipboard was preserved.
+
+The APK development signature and version were verified. The Mac build is Apple silicon, ad-hoc signed and unnotarized; its clean installation ZIP is preferred. Build tools: Android platform/build tools 36/36.0.0, JDK 21.0.8, Swift 6.4 in Swift 5 mode, Xcode 27.1. Android tests used dedicated disposable AVD data, not the user's phone or existing AVD.
 
 ## Artifacts and compatibility
 
-- `android/LocalClip-debug.apk`: Android package `org.localclip.android`, **0.2.1 (3)**, min API 29, target API 36, development-signed and debuggable.
-- Install over 0.1.0/0.2.0 to preserve pairing. Package ID, Keystore alias, pairing format, wire protocol and signing key are unchanged. Certificate SHA-256:
-  `ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98`.
-- The existing **Mac 0.2.0** app is compatible and unchanged. `macos/LocalClip-macOS-arm64.zip` remains the Apple silicon, ad-hoc signed, unnotarized Mac build. No Mac update is required for this patch.
-- `LocalClip-source.zip`: complete MIT-licensed source, including tests and the separate experiment. No private signing keys, production pairing data or Git internals.
-- `SHA256SUMS.txt`, `test-logs/`, and the parent `LocalClip-MVP.zip` contain checksums, test evidence and the complete delivery bundle.
+- `android/LocalClip-debug.apk`: `org.localclip.android`, **0.3.0 (4)**; min API 29, target API 36. Optional helper requires API 34+; integrated path tested on API 37.
+- `LocalClip-adb-bridge.zip`: helper JAR, executable Mac launcher and complete setup instructions. The helper's bootstrap requires this debuggable APK.
+- `macos/LocalClip-macOS-arm64.zip` / `macos/LocalClip.app`: Mac **0.3.0**, updated help text. Existing Mac 0.2.x remains protocol-compatible; no Mac update is needed for automatic copying or the screenshot patch.
+- Android signing certificate is unchanged; install over previous versions to preserve pairing. SHA-256: `ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98`.
+- `LocalClip-source.zip`: MIT source, scripts, tests and docs; excludes private signing keys, production pairing data and Git internals. `SHA256SUMS.txt`, test logs and parent `LocalClip-MVP.zip` accompany the artifacts.
 
-The APK signature was verified and its manifest/version inspected. Build tools: Android SDK/build tools 36/36.0.0, Temurin JDK 21.0.8. Tests used the dedicated disposable AVD data directory; existing user AVDs and physical phone settings were not changed.
+## Limits
 
-## Remaining limits
-
-No automatic Gboard background-copy sending in this APK; only the separate ADB access prototype was demonstrated. No independent security audit, forward secrecy, notarization, QR scanner, persistent queue, guaranteed Doze/reboot reliability or Tailscale validation. Physical Pixel/API 35–37 behavior and destination-app image compatibility remain unverified by this automated run. The prior working Mac transport remains unchanged.
+Physical Pixel 11 Pro XL runtime, wireless-debugging setup, USB-unplug survival, long idle/Doze, screen-lock behavior on a physical phone, reboot recovery, Tailscale and every destination app remain unverified. Keep the launcher running; restart it after phone reboot/service stop. No boot auto-start, persistent clipboard queue, work-profile support, QR scanner, forward secrecy, independent security audit or notarization. Hidden Android interfaces can change; the helper fails visibly if its required signatures are unavailable. Other apps still need to expose readable text/image clipboard content. Taking a screenshot is not necessarily copying it.

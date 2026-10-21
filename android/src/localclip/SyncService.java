@@ -8,6 +8,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class SyncService extends Service {
+    private AdbBridge bridge;
     static final String CHANNEL="localclip.connection";
     private final AtomicBoolean running=new AtomicBoolean();
     private final ScheduledExecutorService heartbeat=Executors.newSingleThreadScheduledExecutor();
@@ -44,6 +45,7 @@ public final class SyncService extends Service {
             Wire.Message message=App.takeShared(intent.getStringExtra("handoff"));
             if(message!=null)queueShared(message);
         }
+        refreshBridge();
         if(running.compareAndSet(false,true)){
             new Thread(this::connectLoop,"localclip-connection").start();
             heartbeat.scheduleAtFixedRate(()->{
@@ -51,6 +53,10 @@ public final class SyncService extends Service {
                 long now=SystemClock.elapsedRealtime();for(String key:pending.keySet()){Long time=pending.get(key);if(time!=null&&now-time>12000){pending.remove(key);App.detail="No Mac delivery confirmation. Send again after reconnecting.";if(sharedDeliveries.remove(key))transferNotice("Not confirmed. Share again after reconnecting.");}}
             },10,10,TimeUnit.SECONDS);
         }return START_NOT_STICKY;
+    }
+    synchronized void refreshBridge(){
+        if(AdbBridge.enabled(this)){if(bridge==null){bridge=new AdbBridge(this);bridge.start();}}
+        else if(bridge!=null){bridge.close();bridge=null;}
     }
     private void connectLoop(){
         int delay=1;
@@ -111,6 +117,6 @@ public final class SyncService extends Service {
             }finally{deadline.cancel(false);}
         });}catch(RejectedExecutionException e){throw new Exception("Connection busy. Send again.");}
     }
-    @Override public void onDestroy(){running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();sharedDeliveries.clear();synchronized(sharedLock){sharedItem=null;}if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
+    @Override public void onDestroy(){synchronized(this){if(bridge!=null){bridge.close();bridge=null;}}running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();sharedDeliveries.clear();synchronized(sharedLock){sharedItem=null;}if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
     @Override public IBinder onBind(Intent intent){return null;}
 }

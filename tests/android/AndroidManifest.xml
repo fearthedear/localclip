@@ -5,4 +5,5 @@
         <provider android:name="localclip.SourceImageProvider" android:authorities="org.localclip.tests.images" android:exported="false" android:grantUriPermissions="true"/>
     </application>
     <instrumentation android:name="localclip.AndroidTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
+    <instrumentation android:name="localclip.BridgeTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
 </manifest>

@@ -19,15 +19,15 @@ public final class AndroidTests extends Instrumentation {
     void source(String text)throws Exception{Intent i=new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("text",text).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);c.startActivity(i);Thread.sleep(1200);}
     void shell(String command)throws Exception{try(ParcelFileDescriptor p=getUiAutomation().executeShellCommand(command);FileInputStream in=new FileInputStream(p.getFileDescriptor())){Clips.boundedRead(in);}}
     void capture(String state)throws Exception{
-        runOnMainSync(()->activity.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE));
-        try{Thread.sleep(5000);Bitmap shot=getUiAutomation().takeScreenshot();if(shot==null)throw new Exception("No test screenshot");try(FileOutputStream out=c.openFileOutput("status-"+state+".png",Context.MODE_PRIVATE)){shot.compress(Bitmap.CompressFormat.PNG,100,out);}finally{shot.recycle();}}
-        finally{runOnMainSync(()->activity.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE));}
+        check((activity.getWindow().getAttributes().flags&android.view.WindowManager.LayoutParams.FLAG_SECURE)==0,"main screen permits screenshots");
+        Thread.sleep(1200);Bitmap shot=getUiAutomation().takeScreenshot();if(shot==null)throw new Exception("No test screenshot");
+        try(FileOutputStream out=c.openFileOutput("status-"+state+".png",Context.MODE_PRIVATE)){shot.compress(Bitmap.CompressFormat.PNG,100,out);}finally{shot.recycle();}
     }
     @Override public void onCreate(Bundle args){super.onCreate(args);start();}
     @Override public void onStart(){
         Bundle result=new Bundle();
         try{
-            c=getTargetContext();shell("ime set com.android.inputmethod.latin/.LatinIME");c.getSharedPreferences("settings",0).edit().putBoolean("automatic",false).commit();cb=(ClipboardManager)c.getSystemService(Context.CLIPBOARD_SERVICE);
+            c=getTargetContext();c.getSharedPreferences("settings",0).edit().putBoolean("automatic",false).commit();cb=(ClipboardManager)c.getSystemService(Context.CLIPBOARD_SERVICE);
             String code="localclip1:"+android.util.Base64.encodeToString(("{\"v\":1,\"host\":\"10.0.2.2\",\"port\":47493,\"key\":\"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f\"}").getBytes(StandardCharsets.UTF_8),android.util.Base64.NO_WRAP);
             Config.save(c,code);Config conf=Config.load(c);check(conf.host.equals("10.0.2.2")&&conf.port==47493&&conf.key.length==32,"pairing Keystore save/load");
             boolean invalid=false;try{Config.parse("invalid");}catch(Exception e){invalid=true;}check(invalid,"invalid pairing rejected");
