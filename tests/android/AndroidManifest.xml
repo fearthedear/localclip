@@ -6,4 +6,5 @@
     </application>
     <instrumentation android:name="localclip.AndroidTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
     <instrumentation android:name="localclip.BridgeTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
+    <instrumentation android:name="localclip.DiscoveryTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
 </manifest>

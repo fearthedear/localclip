@@ -7,6 +7,7 @@ enum LCError: Error, CustomStringConvertible {
     var description: String { if case let .invalid(s) = self { return s }; return "Protocol error" }
 }
 enum Wire {
+    static func discoveryID(_ key: Data) -> String { hex(Data(mac(key,"discovery",Data(),Data()).prefix(16))) }
     static let magic = Data("LC01".utf8)
     static let maxContent = 8 * 1024 * 1024
     static let maxFrame = maxContent + 17 + 16

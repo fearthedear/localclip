@@ -29,6 +29,8 @@ enum ImageCheck {
 }
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let server=ClipServer()
+    let discovery=DiscoveryAdvertiser()
+    let discoveryStatus=NSTextField(wrappingLabelWithString:"Local discovery paused")
     var window: NSWindow!
     var statusItem: NSStatusItem!
     let status=NSTextField(labelWithString:"Sharing stopped")
@@ -54,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let editItem=NSMenuItem(title:"Edit",action:nil,keyEquivalent:""),editMenu=NSMenu(title:"Edit")
         for (title,selector,key) in [("Cut","cut:","x"),("Copy","copy:","c"),("Paste","paste:","v"),("Select All","selectAll:","a")] { editMenu.addItem(withTitle:title,action:NSSelectorFromString(selector),keyEquivalent:key) }
         editItem.submenu=editMenu;mainMenu.addItem(editItem);NSApp.mainMenu=mainMenu
-        window=NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:720),styleMask:[.titled,.closable,.miniaturizable],backing:.buffered,defer:false)
+        window=NSWindow(contentRect:NSRect(x:0,y:0,width:640,height:790),styleMask:[.titled,.closable,.miniaturizable],backing:.buffered,defer:false)
         window.title="LocalClip"; window.center(); window.isReleasedWhenClosed=false
         let root=NSStackView(); root.orientation = .vertical; root.alignment = .leading; root.spacing=12; root.translatesAutoresizingMaskIntoConstraints=false
         window.contentView!.addSubview(root)
@@ -63,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Private clipboard between this Mac and your Android. Text and PNG images, directly between your devices."))
         status.font = .systemFont(ofSize:14,weight:.semibold); root.addArrangedSubview(status)
         root.addArrangedSubview(NSTextField(labelWithString:"Mac address (choose a Wi-Fi IP or Tailscale address):"))
-        host.stringValue=localAddresses().first ?? ""; root.addArrangedSubview(host); host.widthAnchor.constraint(equalTo:root.widthAnchor).isActive=true
+        host.stringValue=UserDefaults.standard.string(forKey:"preferredHost") ?? localAddresses().first ?? ""; root.addArrangedSubview(host); host.widthAnchor.constraint(equalTo:root.widthAnchor).isActive=true
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Available: " + localAddresses().joined(separator:", ")))
         let actions=NSStackView(); actions.spacing=10
         for (title,action) in [("Start sharing",#selector(start)),("Pause",#selector(pause)),("Send current clipboard",#selector(sendCurrent))] { actions.addArrangedSubview(NSButton(title:title,target:self,action:action)) }; root.addArrangedSubview(actions)
@@ -72,6 +74,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pairActions.addArrangedSubview(NSButton(title:"Forget phone / rotate secret",target:self,action:#selector(rotate)))
         root.addArrangedSubview(pairActions)
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Paste the pairing code into LocalClip on Android. Treat it like a password. Port: 47391. Only one paired phone is supported."))
+        let tailButton=NSButton(title:"Use this Mac’s Tailscale name",target:self,action:#selector(useTailscale))
+        root.addArrangedSubview(tailButton);root.addArrangedSubview(discoveryStatus)
+        discovery.onStatus={ [weak self] text in self?.discoveryStatus.stringValue=text }
         root.addArrangedSubview(detail)
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Keep Gboard on Android. For automatic copying, enable the optional ADB helper in Android LocalClip and run the supplied Mac launcher. Without it: Share → LocalClip, or open LocalClip and tap Send clipboard.\n\nMac → phone is automatic while sharing and the Android connection service are running and the phone is unlocked. Neither device keeps a clipboard history. The Mac must stay awake. Allow clipboard access and local network access when macOS asks."))
         for view in root.arrangedSubviews { if let field = view as? NSTextField, field !== host { field.maximumNumberOfLines=0; field.lineBreakMode = .byWordWrapping; field.widthAnchor.constraint(equalTo:root.widthAnchor).isActive=true } }
@@ -90,19 +95,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !running else { return }
         do { runID+=1; let id=runID
             server.onMessage={ [weak self] message in DispatchQueue.main.async { guard let self, self.runID==id else { return }; self.receive(message) } }
-            lastChange=board.changeCount; try server.start(secret:secret,port:47391); running=true; statusItem.button?.title="⇄ Clip •" } catch { showError(error) }
+            lastChange=board.changeCount; try server.start(secret:secret,port:47391); running=true; if !testMode { discovery.start(secret:secret,port:47391) }; statusItem.button?.title="⇄ Clip •" } catch { showError(error) }
     }
-    @objc func pause() { runID+=1; server.stop(); running=false; pending.removeAll(); status.stringValue="Sharing paused"; statusItem.button?.title="⇄ Clip" }
+    @objc func pause() { runID+=1; server.stop(); discovery.stop(); running=false; pending.removeAll(); status.stringValue="Sharing paused"; statusItem.button?.title="⇄ Clip" }
     @objc func quit() { NSApp.terminate(nil) }
     @objc func rotate() {
         pause()
         do { secret=try SecretStore.rotate(); detail.stringValue="Old pairing revoked. Copy a new pairing code and pair again." } catch { showError(error) }
     }
+    @objc func useTailscale() {
+        detail.stringValue="Looking up this Mac’s Tailscale name…"
+        let addresses=localAddresses()
+        DispatchQueue.global(qos:.utility).async { [weak self] in
+            let result=Result { try TailscaleAddress.name(local:addresses) }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                switch result {
+                case .success(let name): self.host.stringValue=name;UserDefaults.standard.set(name,forKey:"preferredHost");self.detail.stringValue="Tailscale name selected. Both devices must use the same tailnet. Copy the pairing code, or enter this name on Android."
+                case .failure(let error): self.detail.stringValue=String(describing:error)
+                }
+            }
+        }
+    }
     @objc func copyPair() {
         do {
             let address=host.stringValue.trimmingCharacters(in:.whitespacesAndNewlines)
             guard !address.isEmpty, address.count<=253, !address.contains("/"), !address.contains(where:{$0.isWhitespace}) else { throw LCError.invalid("Enter a valid Mac IP or hostname") }
-            let data=try JSONSerialization.data(withJSONObject:["v":1,"host":address,"port":47391,"key":Wire.hex(secret)],options:[.sortedKeys])
+            UserDefaults.standard.set(address,forKey:"preferredHost")
+            let hosts=Array(([address]+localAddresses()).reduce(into:[String]()){ if !$0.contains($1) && $0.count<6 { $0.append($1) } })
+            let data=try JSONSerialization.data(withJSONObject:["v":1,"host":address,"hosts":hosts,"port":47391,"key":Wire.hex(secret)],options:[.sortedKeys])
             let code="localclip1:"+data.base64EncodedString()
             NSPasteboard.general.clearContents(); NSPasteboard.general.setString(code,forType:.string)
             NSPasteboard.general.setData(Data(),forType:NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
@@ -148,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func showError(_ error: Error) { let a=NSAlert(); a.messageText="LocalClip"; a.informativeText=String(describing:error); a.runModal() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool { false }
-    func applicationWillTerminate(_ notification: Notification) { server.stop() }
+    func applicationWillTerminate(_ notification: Notification) { server.stop();discovery.stop() }
 }
 func localAddresses() -> [String] {
     var list: UnsafeMutablePointer<ifaddrs>?; guard getifaddrs(&list)==0 else { return [] }; defer{ freeifaddrs(list) }

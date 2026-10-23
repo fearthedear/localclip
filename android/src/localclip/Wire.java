@@ -21,6 +21,7 @@ public final class Wire {
         Mac m = Mac.getInstance("HmacSHA256"); m.init(new SecretKeySpec(secret,"HmacSHA256"));
         return m.doFinal(concat(("LC01/"+label).getBytes(StandardCharsets.US_ASCII), server, client));
     }
+    public static String discoveryID(byte[] key)throws Exception { return hex(Arrays.copyOf(mac(key,"discovery",new byte[0],new byte[0]),16)); }
     public static String hex(byte[] bytes) { StringBuilder s = new StringBuilder(); for (byte b : bytes) s.append(String.format(Locale.ROOT,"%02x",b & 255)); return s.toString(); }
     public static byte[] unhex(String s) throws IOException {
         if (!s.matches("[0-9a-fA-F]{64}")) throw new IOException("Secret must be 64 hex characters");

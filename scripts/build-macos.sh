@@ -7,7 +7,7 @@ trap 'rm -rf "$TEMP"' EXIT
 APP="$TEMP/LocalClip.app"
 ARCH="${ARCH:-arm64}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-swiftc -swift-version 5 -O -target "$ARCH-apple-macosx13.0" -framework AppKit -framework CryptoKit -framework Security -framework ImageIO "$ROOT/macos/Protocol.swift" "$ROOT/macos/Server.swift" "$ROOT/macos/App.swift" "$ROOT/macos/main.swift" -o "$APP/Contents/MacOS/LocalClip"
+swiftc -swift-version 5 -O -target "$ARCH-apple-macosx13.0" -framework AppKit -framework CryptoKit -framework Security -framework ImageIO "$ROOT/macos/Protocol.swift" "$ROOT/macos/Server.swift" "$ROOT/macos/Discovery.swift" "$ROOT/macos/App.swift" "$ROOT/macos/main.swift" -o "$APP/Contents/MacOS/LocalClip"
 cp "$ROOT/macos/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/macos/Resources/LocalClip.icns" "$APP/Contents/Resources/LocalClip.icns"
 xattr -cr "$APP"

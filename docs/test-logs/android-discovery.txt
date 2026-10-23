@@ -1,0 +1,21 @@
+PASS connection service starts with stale saved address
+PASS DNS-SD fixture registered
+PASS matching name with wrong TXT identity is ignored
+PASS wrong advertisement removed
+PASS correct paired Mac advertisement registered
+PASS stale address automatically replaced by discovered route
+PASS legacy pairing stays intact; no re-pair required
+PASS discovered route completes encrypted Swift clipboard round trip
+PASS discovered peer applies exact text
+PASS first advertisement withdrawn
+PASS paired Mac reappears at changed endpoint
+PASS automatic reconnect follows changed DNS-SD endpoint
+PASS clipboard transfer succeeds after endpoint changes
+PASS changed endpoint retains pairing identity
+PASS MagicDNS address edit preserves encrypted pairing key
+PASS new pairing codes retain explicit alternate addresses
+PASS address editor rejects whitespace
+PASS address editor rejects host-and-port input
+PASS URL rejected by address editor
+PASS Disconnect shuts down service and discovery
+Android DNS-SD integration: 20 assertions passed on API 37

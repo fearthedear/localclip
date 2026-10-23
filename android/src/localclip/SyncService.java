@@ -9,6 +9,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class SyncService extends Service {
     private AdbBridge bridge;
+    private PeerDiscovery discovery;
+    private final Object retryLock=new Object();private long routeRevision;
+    private volatile String connectedAddress="";
+    String connectedAddress(){return connectedAddress;}
+    String discoveryState(){return discovery==null?"":discovery.state();}
+    void routesChanged(){synchronized(retryLock){routeRevision++;retryLock.notifyAll();}}
+    void reconnect(){Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}routesChanged();}
     static final String CHANNEL="localclip.connection";
     private final AtomicBoolean running=new AtomicBoolean();
     private final ScheduledExecutorService heartbeat=Executors.newSingleThreadScheduledExecutor();
@@ -47,6 +54,7 @@ public final class SyncService extends Service {
         }
         refreshBridge();
         if(running.compareAndSet(false,true)){
+            try{Config config=Config.load(this);if(config!=null){discovery=new PeerDiscovery(this,config.key,this::routesChanged);discovery.start();}}catch(Exception e){App.detail="Wi-Fi discovery unavailable; using saved address";}
             new Thread(this::connectLoop,"localclip-connection").start();
             heartbeat.scheduleAtFixedRate(()->{
                 if(connection!=null)try{send(new Wire.Message(3,new byte[0]),null);}catch(Exception ignored){}
@@ -61,15 +69,29 @@ public final class SyncService extends Service {
     private void connectLoop(){
         int delay=1;
         while(running.get()){
-            Socket s=new Socket();
+            long revision;synchronized(retryLock){revision=routeRevision;}
+            Socket s=null;
             try{
                 Config c=Config.load(this);if(c==null){status(App.Phase.DISCONNECTED,"Pair with your Mac first");break;}
-                socket=s;status(App.Phase.CONNECTING,"Connecting to "+c.host);s.connect(new InetSocketAddress(c.host,c.port),6000);s.setTcpNoDelay(true);s.setSoTimeout(6000);
-                InputStream in=s.getInputStream();OutputStream out=s.getOutputStream();Wire.Session crypto=Wire.client(in,out,c.key);
+                Exception last=null;Connection established=null;
+                java.util.List<PeerDiscovery.Endpoint> routes=discovery==null?java.util.Collections.singletonList(new PeerDiscovery.Endpoint(c.host,c.port,null)):discovery.candidates(c);
+                for(PeerDiscovery.Endpoint endpoint:routes){
+                    if(!running.get())break;
+                    Socket attempt=new Socket();socket=attempt;
+                    try{
+                        status(App.Phase.CONNECTING,"Connecting to "+endpoint.label());
+                        if(endpoint.network!=null)endpoint.network.bindSocket(attempt);
+                        attempt.connect(new InetSocketAddress(endpoint.host,endpoint.port),2500);attempt.setTcpNoDelay(true);attempt.setSoTimeout(4000);
+                        Wire.Session crypto=Wire.client(attempt.getInputStream(),attempt.getOutputStream(),c.key);
+                        established=new Connection(attempt,crypto,attempt.getOutputStream());connectedAddress=endpoint.label();s=attempt;break;
+                    }catch(Exception e){last=e;try{attempt.close();}catch(IOException ignored){}}
+                }
+                if(established==null)throw last==null?new IOException("No reachable Mac address"):last;
+                InputStream in=s.getInputStream();
                 if(!running.get())break;
-                s.setSoTimeout(45000);Connection active=new Connection(s,crypto,out);lastResponse=SystemClock.elapsedRealtime();connection=active;delay=1;status(App.Phase.CONNECTED,"Connected to Mac · encrypted");flushShared();
+                s.setSoTimeout(45000);Connection active=established;lastResponse=SystemClock.elapsedRealtime();connection=active;delay=1;status(App.Phase.CONNECTED,"Connected to Mac · encrypted");flushShared();
                 while(running.get()&&connection==active){
-                    Wire.Message message=crypto.rx.receive(in);lastResponse=SystemClock.elapsedRealtime();
+                    Wire.Message message=active.crypto.rx.receive(in);lastResponse=SystemClock.elapsedRealtime();
                     if(message.type==4){if(pending.remove(Wire.hex(message.id))!=null){App.detail="Mac clipboard updated — ready to paste";if(sharedDeliveries.remove(Wire.hex(message.id)))transferNotice("Shared item delivered to Mac");}}
                     else if(message.type==3)send(new Wire.Message(4,message.id,new byte[0]),null);
                     else {
@@ -77,9 +99,9 @@ public final class SyncService extends Service {
                         catch(Exception e){App.detail=e.getMessage()==null?"Could not apply received clipboard":e.getMessage();}
                     }
                 }
-            }catch(Exception e){connection=null;if(running.get())status(e instanceof java.security.GeneralSecurityException?App.Phase.PAIRING_REJECTED:App.Phase.RECONNECTING,e instanceof java.security.GeneralSecurityException?"Pairing rejected. Check the Mac pairing code.":"Mac unavailable · retrying in "+delay+"s");}
-            finally{connection=null;socket=null;try{s.close();}catch(IOException ignored){}}
-            if(running.get())try{Thread.sleep(delay*1000L);delay=Math.min(15,delay*2);}catch(InterruptedException ignored){}
+            }catch(Exception e){connection=null;if(running.get())status(e instanceof java.security.GeneralSecurityException?App.Phase.PAIRING_REJECTED:App.Phase.RECONNECTING,e instanceof java.security.GeneralSecurityException?"Pairing rejected. Check the Mac pairing code.":"Mac unavailable · searching Wi-Fi and saved addresses · retrying in "+delay+"s");}
+            finally{connection=null;socket=null;if(s!=null)try{s.close();}catch(IOException ignored){}}
+            if(running.get())synchronized(retryLock){try{if(routeRevision==revision)retryLock.wait(delay*1000L);}catch(InterruptedException ignored){}delay=Math.min(15,delay*2);}
         }
         if(running.get())App.main.post(this::stopSelf);
     }
@@ -117,6 +139,6 @@ public final class SyncService extends Service {
             }finally{deadline.cancel(false);}
         });}catch(RejectedExecutionException e){throw new Exception("Connection busy. Send again.");}
     }
-    @Override public void onDestroy(){synchronized(this){if(bridge!=null){bridge.close();bridge=null;}}running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();sharedDeliveries.clear();synchronized(sharedLock){sharedItem=null;}if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
+    @Override public void onDestroy(){running.set(false);routesChanged();if(discovery!=null)discovery.close();synchronized(this){if(bridge!=null){bridge.close();bridge=null;}}running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();sharedDeliveries.clear();synchronized(sharedLock){sharedItem=null;}if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
     @Override public IBinder onBind(Intent intent){return null;}
 }

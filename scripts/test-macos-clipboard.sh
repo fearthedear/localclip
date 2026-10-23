@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="${BUILD_DIR:-$ROOT/.build/tests}"
 mkdir -p "$BUILD/java"
-swiftc -swift-version 5 -framework AppKit -framework ImageIO -framework Security -framework CryptoKit "$ROOT/macos/Protocol.swift" "$ROOT/macos/Server.swift" "$ROOT/macos/App.swift" "$ROOT/tests/MacClipboardTests.swift" -o "$BUILD/mac-clipboard-tests"
+swiftc -swift-version 5 -framework AppKit -framework ImageIO -framework Security -framework CryptoKit "$ROOT/macos/Protocol.swift" "$ROOT/macos/Server.swift" "$ROOT/macos/Discovery.swift" "$ROOT/macos/App.swift" "$ROOT/tests/MacClipboardTests.swift" -o "$BUILD/mac-clipboard-tests"
 javac -d "$BUILD/java" "$ROOT/android/src/localclip/Wire.java" "$ROOT/tests/MacClipboardPeer.java"
 "$BUILD/mac-clipboard-tests" > "$BUILD/mac-clipboard.log" 2>&1 &
 TEST_PID=$!

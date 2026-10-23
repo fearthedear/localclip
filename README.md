@@ -12,7 +12,7 @@ A small, MIT-licensed clipboard companion for macOS and Android. Text and images
 - `LocalClip-adb-bridge.zip`: optional Gboard-compatible automatic-copy helper, Mac launcher and setup instructions. Requires Android 14+ and authorized USB/wireless debugging; tested on Android 17/API 37.
 - `LocalClip-macOS-arm64.zip`: Apple silicon, macOS 13 or later; ad-hoc signed, not notarized. Extract it and move `LocalClip.app` into Applications.
 
-Mac 0.3.1 adds a clipboard-and-transfer app icon for Finder, Dock and Spotlight. Android remains 0.3.0.
+Version 0.4.0 adds automatic local Wi-Fi discovery, recovery from stale saved IPs, a pairing-preserving address editor, and a Mac button for its stable Tailscale MagicDNS name. Existing pairing is retained. See [network setup](docs/NETWORKING.md).
 
 Version 0.3.0 adds automatic background copying through the optional ADB helper and permits screenshots of LocalClip itself. Install over earlier versions to preserve pairing; the signing certificate and Mac wire protocol are unchanged. Your existing Mac app remains compatible.
 
@@ -72,6 +72,7 @@ Treat the pairing code like a password and replace it in both devices' clipboard
 
 | Feature | Behavior |
 |---|---|
+| Finding the Mac | Bonjour/Android NSD automatically finds the paired Mac after Wi-Fi IP changes. Stable Tailscale names work across networks when both devices are connected. |
 | Mac → Android | New Mac copies arrive automatically while Mac sharing and Android's connection service are running and the phone is unlocked. |
 | Android → Mac with Gboard | Automatic new copies with the optional ADB helper; otherwise explicit Share, selected-text action, or focused Send clipboard button. The selected keyboard stays unchanged. |
 | Optional ADB helper | Separate shell process, encrypted loopback channel, explicit debugging authorization. API 37/Gboard emulator tested. Restart after reboot/service stop. Main user only; hidden APIs can change. |
@@ -91,7 +92,7 @@ Mac clipboard polling is every 350 ms while sharing is enabled. This is a design
 
 ## Optional Tailscale
 
-Enter the Mac's reachable Tailscale IP or MagicDNS name in its address field, then copy and save an updated pairing code on Android. Permit TCP 47391 between the devices in the tailnet policy. Application encryption remains enabled.
+Use **Use this Mac’s Tailscale name** in the Mac app. In Android, use **Change address / use Tailscale** to save that name without replacing pairing. Both devices must use the same tailnet; permit TCP 47391 between them. Application encryption remains enabled. See [network discovery and setup](docs/NETWORKING.md).
 
 LocalClip itself has no cloud service. Tailscale uses coordination infrastructure and can relay encrypted traffic through DERP when a direct connection is unavailable. Omit Tailscale and use Wi-Fi IPs for a local-only installation. Tailscale was not tested during development.
 
@@ -131,6 +132,7 @@ The Android build creates a local development key at `.build/android/debug.keyst
 ```sh
 ./scripts/test.sh
 ./scripts/test-macos-clipboard.sh
+./scripts/test-discovery.sh
 ```
 
 These cover Java/Swift crypto and framing, real cross-platform TCP, rejection/reconnect behavior, listener lifecycle, and the Mac app's clipboard methods on a private named pasteboard. They preserve the user's general Mac clipboard.
@@ -147,6 +149,7 @@ adb install -r ../android/LocalClip-debug.apk
 adb install -r .build/android/LocalClip-tests.apk
 adb shell pm grant org.localclip.android android.permission.POST_NOTIFICATIONS
 adb shell am instrument -w org.localclip.tests/localclip.AndroidTests
+adb shell am instrument -w org.localclip.tests/localclip.DiscoveryTests
 # Optional helper integration tests:
 ./scripts/build-adb-bridge.sh
 adb push ../adb-bridge/clipboard-bridge.jar /data/local/tmp/localclip-bridge.jar

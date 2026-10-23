@@ -1,62 +1,55 @@
-# LocalClip 0.3.0 — automatic Gboard copying and screenshot fix
+# LocalClip 0.4.0 — address-change recovery
 
-Checked 21 October 2026 (Asia/Kuala_Lumpur). Repository: https://github.com/fearthedear/localclip
+Checked 23 October 2026 (Asia/Kuala_Lumpur). Repository: https://github.com/fearthedear/localclip
 
-## What changed
+## Implemented and built
 
-- Optional, own-source ADB helper automatically sends new text and image copies while Gboard stays selected and another app remains in front. It runs as shell UID 2000, without root or a replacement keyboard.
-- The APK and helper use a separate, mutually authenticated AES-256-GCM loopback session. The authorized launcher pipes a temporary app-private key through `run-as`; the Mac pairing secret stays in the APK. Disabling or stopping sharing closes the channel and deletes the temporary key. Restarting rotates it.
-- Android's automatic-copying card shows waiting/active status independently of the Mac connection. Manual background Share remains available.
-- LocalClip's main window allows screenshots. The prior main-window FLAG_SECURE protection caused black screenshots before any transfer. A full LocalClip screenshot now retains visible pixels through image conversion and the Mac round trip. The transparent, short-lived Share receiver still uses a secure window.
+Mac sharing publishes its current listener through Bonjour; Android identifies the already-paired Mac and resolves its current endpoints. A stale saved Wi-Fi address can recover without re-pairing. Android shows its authenticated active route and has a pairing-preserving address editor. Mac can select its verified Tailscale MagicDNS name and remembers the chosen host. The native app icon, Gboard ADB helper, background Share and screenshot fix remain included.
 
-## Android 17 / Gboard results
+No new cloud service, subnet scan, runtime library or Android permission was added. New optional pairing route fields are backward compatible, and the clipboard handshake/encryption is unchanged. See NETWORKING.md for design and setup.
 
-Official Android 17/API 37 arm64 Google APIs image, revision 6, fingerprint:
+## New network checks
 
-`google/sdk_gphone64_arm64/emu64a:17/CE2A.260420.019/15611780:userdebug/dev-keys`
+**5 Mac Bonjour integration assertions passed:**
 
-Gboard stayed selected: `com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME`.
+- Real publication and browser resolution with the actual listener port.
+- Domain-separated paired identity and TXT version survive DNS-SD.
+- Advertisements contain no raw pairing secret.
+- Pausing withdraws the advertisement.
+- Restarting publishes a new port with the same identity.
 
-**33 helper integration assertions passed** through the real Swift test peer, including:
+**20 Android DNS-SD integration assertions passed on Android 17/API 37:**
 
-- A new independent bridge key exists; a wrong key fails authentication.
-- The packaged Mac launcher starts the helper; the app independently confirms its authenticated session.
-- No existing clipboard is read/sent when starting the helper.
-- A new Unicode copy from another application reaches the Mac, with exact echoed contents and the source application remaining in front. Copying identical text again sends another event.
-- Sensitive-marked text and pairing codes are skipped.
-- An image URI from a non-exported source provider is read by the shell helper and automatically delivered; decoded PNG dimensions and pixels survive the Mac round trip.
-- Mac-to-phone updates do not loop back through the helper; the selected keyboard remains unchanged.
-- LocalClip screenshots are permitted, contain visible pixels, and remain non-black with unchanged dimensions after a full image round trip.
-- Disabling closes the helper channel, deletes its temporary key and stops further sends. Reenabling waits for an explicit restart; the new key differs. Disconnect stops both network and helper channel.
+- Starts with a stale saved address; rejects a matching service name with the wrong TXT identity.
+- Uses actual Android NSD registration/resolution to find the right advertisement.
+- Automatically connects through a discovered route while preserving the legacy saved pairing.
+- Completes an authenticated encrypted clipboard round trip to the real Swift peer, with exact returned text.
+- Withdraws the old advertisement and reconnects to a changed advertised endpoint; clipboard transfer succeeds with the same key.
+- Editing a MagicDNS host retains the encrypted pairing key; URL-shaped input is rejected.
+- Disconnect shuts down the service/discovery lifecycle.
 
-The **packaged `.command` launcher** was run against the test emulator, rather than only exercising a test-specific shell launch. It reported API 37 active and exited successfully when the option was disabled. The helper contains no clipboard-content/URI/hash logging.
+The Android DNS-SD fixture advertises inside the emulator and forwards test-only TCP bytes to the Mac Swift peer. Mac publication is tested separately with a real Mac Bonjour browser. These checks cover both platform APIs and transport integration; they do not prove multicast delivery from a physical Pixel to this Mac.
 
-**50 Android regression assertions passed** on API 37, covering Keystore pairing, invalid pairing, text/image/selected-text Share, exact PNG bytes and pixels, sensitive/size exclusions, ordinary background-read denial, background Mac clipboard writes, transparent external text/image shares, reconnect-and-send, connected/disconnected/unpaired indicators, normal keyboard retention, focused automatic sending and echo prevention. LocalClip screenshots were captured without clearing a production security flag. These regression checks preceded the final layout-only move of the automatic-copying card above manual sending; the 33 helper checks, including UI screenshot verification, were rerun against the final APK.
+## Regression checks rerun on this source
 
-## Mac and protocol verification
+- Android clipboard integration: **50 assertions**, including text/images, external transparent Share, reconnect/send, privacy exclusions, background Mac clipboard writes, connection UI, no replacement IME, selected keyboard unchanged, screenshot permission and echo prevention.
+- Optional ADB helper: **33 assertions**, including the actual packaged Mac launcher, new background text/image copies, exact image pixels, sensitive/pairing exclusions, no initial clipboard read, repeated copies, no echo, screenshot round trip, temporary-key rotation and disable/disconnect behavior.
+- Android emulator: API 37, official Google APIs arm64 revision 6, fingerprint `google/sdk_gphone64_arm64/emu64a:17/CE2A.260420.019/15611780:userdebug/dev-keys`; Gboard selected and retained.
+- Java protocol: **19 tests**; Swift protocol: **19 tests**, including a matching fixed discovery-ID vector.
+- Java ↔ Swift TCP: **116 assertions**; listener start/pause/restart: **30 cycles**.
+- Mac private-pasteboard integration: **7 peer assertions plus local checks**. The user's general Mac clipboard was preserved by these test suites.
 
-Rerun successfully on this source:
+The DNS-SD suite was rerun against the final APK after tightening address-input validation; the other Android regressions preceded that validation-only adjustment.
 
-- Java protocol: **18 tests**.
-- Swift protocol: **18 tests**.
-- Java ↔ Swift TCP: **116 assertions**, including Unicode, PNG, 8 MiB payload, fragmented frames, tamper/replay/oversize rejection, wrong secret and reconnect.
-- Mac listener start/pause/restart: **30 cycles**.
-- Mac private-pasteboard integration: **7 peer assertions plus local checks**, including actual text/PNG clipboard methods and automatic sending. The user's general Mac clipboard was preserved.
-
-The APK development signature and version were verified. The Mac build is Apple silicon, ad-hoc signed and unnotarized; its clean installation ZIP is preferred. Build tools: Android platform/build tools 36/36.0.0, JDK 21.0.8, Swift 6.4 in Swift 5 mode, Xcode 27.1. Android tests used dedicated disposable AVD data, not the user's phone or existing AVD.
+Total Android assertions in this run: **103**. Pure transport tests do not certify network discovery or destination-app compatibility beyond their stated scope.
 
 ## Artifacts and compatibility
 
-- `android/LocalClip-debug.apk`: `org.localclip.android`, **0.3.0 (4)**; min API 29, target API 36. Optional helper requires API 34+; integrated path tested on API 37.
-- `LocalClip-adb-bridge.zip`: helper JAR, executable Mac launcher and complete setup instructions. The helper's bootstrap requires this debuggable APK.
-- `macos/LocalClip-macOS-arm64.zip` / `macos/LocalClip.app`: Mac **0.3.1**, updated help text and clipboard-and-transfer icon. Existing Mac 0.2.x remains protocol-compatible; no Mac update is needed for automatic copying or the screenshot patch.
-- Android signing certificate is unchanged; install over previous versions to preserve pairing. SHA-256: `ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98`.
-- `LocalClip-source.zip`: MIT source, scripts, tests and docs; excludes private signing keys, production pairing data and Git internals. `SHA256SUMS.txt`, test logs and parent `LocalClip-MVP.zip` accompany the artifacts.
+- Android `org.localclip.android`: **0.4.0 (5)**, min API 29, target API 36, development-signed and debuggable. Signature SHA-256 remains `ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98`. Install over the previous APK to retain pairing.
+- Mac: **0.4.0 (5)**, Apple silicon, ad-hoc signed, unnotarized. Installed in /Applications and available as `macos/LocalClip-macOS-arm64.zip`. macOS may ask the updated app to access its existing Keychain pairing key; that protected prompt requires user interaction.
+- Optional helper JAR/launcher remain protocol-compatible. Build source includes editable icon artwork, native ICNS, discovery implementation, tests, scripts and documentation.
+- `LocalClip-source.zip`, `LocalClip-adb-bridge.zip`, `SHA256SUMS.txt`, test logs and parent `LocalClip-MVP.zip` accompany the apps. Private signing keys, production pairing secrets and Git internals are excluded.
 
-## Limits
+## Remaining limits
 
-Physical Pixel 11 Pro XL runtime, wireless-debugging setup, USB-unplug survival, long idle/Doze, screen-lock behavior on a physical phone, reboot recovery, Tailscale and every destination app remain unverified. Keep the launcher running; restart it after phone reboot/service stop. No boot auto-start, persistent clipboard queue, work-profile support, QR scanner, forward secrecy, independent security audit or notarization. Hidden Android interfaces can change; the helper fails visibly if its required signatures are unavailable. Other apps still need to expose readable text/image clipboard content. Taking a screenshot is not necessarily copying it.
-
-## Mac 0.3.1 icon update — 23 October 2026
-
-Added editable vector artwork and a native multi-resolution ICNS, declared by CFBundleIconFile and bundled by the Mac build script. Native icon resolutions range from 16 to 1024 pixels. The new Mac app was built, its ad-hoc signature verified, installed in /Applications, reopened successfully and sharing restored to its previous listening state. The icon was visually inspected. Android and transport code did not change; their earlier results above were not rerun for this asset-only update. Android remains 0.3.0; the Mac is now 0.3.1 (4). The Mac ZIP contains the updated icon, and the source includes the renderer and ICNS.
+API 29–36 runtimes were not exercised for this discovery release. A physical Pixel still needs to install this APK and verify recovery on its actual Wi-Fi. AP isolation/multicast blocking can prevent discovery; direct saved addresses and Tailscale names remain available. Existing broken connections may take up to their heartbeat/receive timeout to detect network loss. Cross-network Tailscale delivery, phone wireless-debugging setup, USB-unplug survival, long idle/Doze and physical lock behavior remain unverified. No boot auto-start, persistent queue, work-profile support, QR scanner, forward secrecy, independent security audit or notarization.

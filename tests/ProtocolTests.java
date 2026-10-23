@@ -10,6 +10,7 @@ public final class ProtocolTests {
     public static void main(String[] args)throws Exception{
         byte[] key=new byte[32],s=new byte[32],c=new byte[32];for(int i=0;i<32;i++){key[i]=(byte)i;s[i]=(byte)(i+32);c[i]=(byte)(i+64);}
         String expected=args[0];check(Wire.hex(Wire.mac(key,"client",s,c)).equals(expected),"HMAC vector");
+        check(Wire.discoveryID(key).equals("4ce9b50ef959bd12074a57de1566bab0"),"stable domain-separated discovery ID");
         byte[] msg=new Wire.Message(1,"hello 🌏\ntext".getBytes(StandardCharsets.UTF_8)).encode();
         Wire.Frames tx=new Wire.Frames(key),rx=new Wire.Frames(key);byte[] frame=tx.seal(msg);
         check(Arrays.equals(rx.open(frame),msg),"AES roundtrip");

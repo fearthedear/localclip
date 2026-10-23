@@ -1,4 +1,4 @@
-# Automatic copying with Gboard — LocalClip 0.3.0
+# Automatic copying with Gboard — LocalClip 0.4.0
 
 **Implemented and tested on Android 17/API 37 with Gboard in an arm64 emulator.** A separate, rootless ADB shell helper listens for actual clipboard changes. Copying supported text or an image in another app sends it through LocalClip's encrypted Mac connection without Share or opening LocalClip. Gboard stays selected. This observes clipboard changes, not keyboard keystrokes.
 
@@ -6,7 +6,7 @@ The ordinary APK cannot read arbitrary background copies by itself. The helper i
 
 ## Setup on your phone and Mac
 
-1. Install `LocalClip-debug.apk` 0.3.0 over the existing version. Pair and **Connect to Mac** as usual. The existing Mac app remains compatible.
+1. Install `LocalClip-debug.apk` 0.4.0 over the existing version. Pair and **Connect to Mac** as usual. The existing Mac app remains compatible.
 2. In Android LocalClip, enable **Allow automatic copying through the ADB helper**. Its status initially says **Waiting for ADB helper**.
 3. Extract `LocalClip-adb-bridge.zip` on the Mac. Keep its launcher, JAR and README together. Install Google's [SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools) if `adb` is not already installed. The launcher also finds Android Studio's usual Mac SDK location.
 4. For USB setup: enable **Developer options → USB debugging**, connect the phone, unlock it, and accept this Mac's debugging prompt. These are Android debugging permissions, separate from LocalClip pairing.

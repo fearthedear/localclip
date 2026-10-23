@@ -6,6 +6,7 @@ import Foundation
     static func main()throws{
         let key=Data(0..<32),s=Data(32..<64),c=Data(64..<96)
         check(Wire.hex(Wire.mac(key,"client",s,c))==CommandLine.arguments[1],"HMAC vector")
+        check(Wire.discoveryID(key)=="4ce9b50ef959bd12074a57de1566bab0","stable domain-separated discovery ID")
         let msg=try ClipMessage(type:1,body:Data("hello 🌏\ntext".utf8)).data
         let tx=FrameCipher(key:key),rx=FrameCipher(key:key);let frame=try tx.seal(msg)
         check(try rx.open(frame)==msg,"AES roundtrip")

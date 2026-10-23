@@ -4,10 +4,11 @@
 <key>CFBundleExecutable</key><string>LocalClip</string>
 <key>CFBundleIdentifier</key><string>org.localclip.mac</string>
 <key>CFBundleName</key><string>LocalClip</string>
+<key>NSBonjourServices</key><array><string>_localclip._tcp</string></array>
 <key>CFBundleIconFile</key><string>LocalClip.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.3.1</string>
-<key>CFBundleVersion</key><string>4</string>
+<key>CFBundleShortVersionString</key><string>0.4.0</string>
+<key>CFBundleVersion</key><string>5</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSLocalNetworkUsageDescription</key><string>Connect directly to your paired Android device for encrypted clipboard sharing.</string>
