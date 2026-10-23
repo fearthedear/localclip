@@ -12,6 +12,8 @@ A small, MIT-licensed clipboard companion for macOS and Android. Text and images
 - `LocalClip-adb-bridge.zip`: optional Gboard-compatible automatic-copy helper, Mac launcher and setup instructions. Requires Android 14+ and authorized USB/wireless debugging; tested on Android 17/API 37.
 - `LocalClip-macOS-arm64.zip`: Apple silicon, macOS 13 or later; ad-hoc signed, not notarized. Extract it and move `LocalClip.app` into Applications.
 
+Mac 0.3.1 adds a clipboard-and-transfer app icon for Finder, Dock and Spotlight. Android remains 0.3.0.
+
 Version 0.3.0 adds automatic background copying through the optional ADB helper and permits screenshots of LocalClip itself. Install over earlier versions to preserve pairing; the signing certificate and Mac wire protocol are unchanged. Your existing Mac app remains compatible.
 
 ## Send from Android while using Gboard
@@ -103,6 +105,13 @@ macOS: Xcode/Command Line Tools with Swift and a macOS SDK:
 ./scripts/build-macos.sh
 # Optional Intel build (not runtime-tested):
 ARCH=x86_64 OUTPUT_DIR=../macos-intel ./scripts/build-macos.sh
+```
+
+The Mac icon's editable vector drawing is in `scripts/render-macos-icon.swift`; the build bundles `macos/Resources/LocalClip.icns`. To regenerate all native resolutions:
+
+```sh
+swift scripts/render-macos-icon.swift .build/LocalClip.iconset
+iconutil -c icns .build/LocalClip.iconset -o macos/Resources/LocalClip.icns
 ```
 
 Android: JDK 17+ (built with Temurin 21), SDK platform 36, Build Tools 36.0.0:

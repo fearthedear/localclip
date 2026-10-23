@@ -49,10 +49,14 @@ The APK development signature and version were verified. The Mac build is Apple 
 
 - `android/LocalClip-debug.apk`: `org.localclip.android`, **0.3.0 (4)**; min API 29, target API 36. Optional helper requires API 34+; integrated path tested on API 37.
 - `LocalClip-adb-bridge.zip`: helper JAR, executable Mac launcher and complete setup instructions. The helper's bootstrap requires this debuggable APK.
-- `macos/LocalClip-macOS-arm64.zip` / `macos/LocalClip.app`: Mac **0.3.0**, updated help text. Existing Mac 0.2.x remains protocol-compatible; no Mac update is needed for automatic copying or the screenshot patch.
+- `macos/LocalClip-macOS-arm64.zip` / `macos/LocalClip.app`: Mac **0.3.1**, updated help text and clipboard-and-transfer icon. Existing Mac 0.2.x remains protocol-compatible; no Mac update is needed for automatic copying or the screenshot patch.
 - Android signing certificate is unchanged; install over previous versions to preserve pairing. SHA-256: `ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98`.
 - `LocalClip-source.zip`: MIT source, scripts, tests and docs; excludes private signing keys, production pairing data and Git internals. `SHA256SUMS.txt`, test logs and parent `LocalClip-MVP.zip` accompany the artifacts.
 
 ## Limits
 
 Physical Pixel 11 Pro XL runtime, wireless-debugging setup, USB-unplug survival, long idle/Doze, screen-lock behavior on a physical phone, reboot recovery, Tailscale and every destination app remain unverified. Keep the launcher running; restart it after phone reboot/service stop. No boot auto-start, persistent clipboard queue, work-profile support, QR scanner, forward secrecy, independent security audit or notarization. Hidden Android interfaces can change; the helper fails visibly if its required signatures are unavailable. Other apps still need to expose readable text/image clipboard content. Taking a screenshot is not necessarily copying it.
+
+## Mac 0.3.1 icon update — 23 October 2026
+
+Added editable vector artwork and a native multi-resolution ICNS, declared by CFBundleIconFile and bundled by the Mac build script. Native icon resolutions range from 16 to 1024 pixels. The new Mac app was built, its ad-hoc signature verified, installed in /Applications, reopened successfully and sharing restored to its previous listening state. The icon was visually inspected. Android and transport code did not change; their earlier results above were not rerun for this asset-only update. Android remains 0.3.0; the Mac is now 0.3.1 (4). The Mac ZIP contains the updated icon, and the source includes the renderer and ICNS.
