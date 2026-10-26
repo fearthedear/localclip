@@ -1,10 +1,22 @@
+PASS test device has a network for local discovery
+PASS discovered Wi-Fi routing retained without a VPN
+PASS active VPN uses normal routing instead of forbidden underlay binding
 PASS connection service starts with stale saved address
 PASS DNS-SD fixture registered
 PASS matching name with wrong TXT identity is ignored
 PASS wrong advertisement removed
+PASS unreachable paired Mac advertisement registered
+PASS discovery reports its resolved address separately from connection
+PASS discovery alone does not mark the Mac connected
+PASS failed discovered route exposes the socket failure
+PASS connection card displays failure diagnostics
+PASS unreachable advertisement removed
 PASS correct paired Mac advertisement registered
 PASS stale address automatically replaced by discovered route
 PASS legacy pairing stays intact; no re-pair required
+PASS authenticated connection clears old failures
+PASS connection card shows the authenticated address instead of the stale backup
+PASS connected card does not show a pending discovery status
 PASS discovered route completes encrypted Swift clipboard round trip
 PASS discovered peer applies exact text
 PASS first advertisement withdrawn
@@ -18,4 +30,4 @@ PASS address editor rejects whitespace
 PASS address editor rejects host-and-port input
 PASS URL rejected by address editor
 PASS Disconnect shuts down service and discovery
-Android DNS-SD integration: 20 assertions passed on API 37
+Android DNS-SD integration: 32 assertions passed on API 37

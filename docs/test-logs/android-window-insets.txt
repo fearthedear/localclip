@@ -1,0 +1,12 @@
+PASS Portrait content clears status bar and cutout
+PASS Portrait viewport clears bottom system UI
+PASS Portrait title stays below status bar
+PASS keyboard is visible for inset test
+PASS Keyboard open content clears status bar and cutout
+PASS Keyboard open viewport clears bottom system UI
+PASS Keyboard open title stays below status bar
+PASS landscape activity recreated
+PASS Landscape content clears status bar and cutout
+PASS Landscape viewport clears bottom system UI
+PASS Landscape title stays below status bar
+Android window insets: 11 assertions passed on API 37

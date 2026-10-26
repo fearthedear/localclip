@@ -11,7 +11,7 @@ public final class SourceActivity extends Activity {
         if(request.getBooleanExtra("copyImage",false)){request.removeExtra("copyImage");new Handler(Looper.getMainLooper()).postDelayed(()->((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newUri(getContentResolver(),"Source image",android.net.Uri.parse("content://org.localclip.tests.images/image.png"))),350);}
         String command=request.getStringExtra("share");if(command==null)return;request.removeExtra("share");
         Intent share=new Intent(Intent.ACTION_SEND).setPackage("org.localclip.android");
-        if("image".equals(command)){android.net.Uri uri=android.net.Uri.parse("content://org.localclip.tests.images/image.png");share.setType("image/png").putExtra(Intent.EXTRA_STREAM,uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);share.setClipData(ClipData.newUri(getContentResolver(),"Source image",uri));}
+        if("image".equals(command)||"screenshot".equals(command)){android.net.Uri uri=android.net.Uri.parse("content://org.localclip.tests.images/"+("screenshot".equals(command)?"screenshot.png":"image.png"));share.setType("image/png").putExtra(Intent.EXTRA_STREAM,uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);share.setClipData(ClipData.newUri(getContentResolver(),"Source image",uri));}
         else share.setType("text/plain").putExtra(Intent.EXTRA_TEXT,command);
         startActivity(share);
     }

@@ -1,55 +1,38 @@
-# LocalClip 0.4.0 — address-change recovery
+# LocalClip Android 0.4.2 — screenshot sharing, system insets and VPN discovery
 
-Checked 23 October 2026 (Asia/Kuala_Lumpur). Repository: https://github.com/fearthedear/localclip
+Checked 26 October 2026 (Asia/Kuala_Lumpur). Mac binary remains 0.4.0.
 
-## Implemented and built
+## Screenshot fix and reproduced failure
 
-Mac sharing publishes its current listener through Bonjour; Android identifies the already-paired Mac and resolves its current endpoints. A stale saved Wi-Fi address can recover without re-pairing. Android shows its authenticated active route and has a pairing-preserving address editor. Mac can select its verified Tailscale MagicDNS name and remembers the chosen host. The native app icon, Gboard ADB helper, background Share and screenshot fix remain included.
+On the previous APK, a valid 3200 × 2200 indexed PNG of 7,045,193 bytes fits the 8 MiB wire limit. Android's native re-encoder expands it past the limit, and converts the bounded output stream exception into a false result. The previous app then reported **Cannot encode PNG**. The reproduction log records that exact failure.
 
-No new cloud service, subnet scan, runtime library or Android permission was added. New optional pairing route fields are backward compatible, and the clipboard handshake/encryption is unchanged. See NETWORKING.md for design and setup.
+The patched app validates dimensions and decodability, then preserves existing PNG bytes. This preserves resolution, pixels and PNG color metadata without re-encoding. Other image formats still convert to PNG. Oversized input or converted output reports the 8 MiB size limit; the 16 megapixel limit remains. No automatic downscaling or quality reduction is introduced.
 
-## New network checks
+## Status bar fix and reproduced failure
 
-**5 Mac Bonjour integration assertions passed:**
+The previous APK fails the portrait status-bar/cutout clearance check. The patched app applies native system-bar, cutout and keyboard insets to its scrolling viewport. Android 17 portrait, landscape and keyboard-open layouts pass; captured test screenshots were visually inspected. Android 10 retains the platform fitsSystemWindows path.
 
-- Real publication and browser resolution with the actual listener port.
-- Domain-separated paired identity and TXT version survive DNS-SD.
-- Advertisements contain no raw pairing secret.
-- Pausing withdraws the advertisement.
-- Restarting publishes a new port with the same identity.
+## Included connection fix
 
-**20 Android DNS-SD integration assertions passed on Android 17/API 37:**
+On 23 October, the physical Pixel 11 Pro XL resolved the paired Mac at its current address but Network.bindSocket failed with **EPERM** while Tailscale's non-bypassable VPN was active. The APK now uses normal Android routing with a VPN active, retaining discovered-network binding otherwise. It does not modify or bypass VPN policy.
 
-- Starts with a stale saved address; rejects a matching service name with the wrong TXT identity.
-- Uses actual Android NSD registration/resolution to find the right advertisement.
-- Automatically connects through a discovered route while preserving the legacy saved pairing.
-- Completes an authenticated encrypted clipboard round trip to the real Swift peer, with exact returned text.
-- Withdraws the old advertisement and reconnects to a changed advertised endpoint; clipboard transfer succeeds with the same key.
-- Editing a MagicDNS host retains the encrypted pairing key; URL-shaped input is rejected.
-- Disconnect shuts down the service/discovery lifecycle.
+The card separates discovered addresses, current attempts, the saved backup address and the authenticated connection, and exposes per-route failures. Existing pairing and the signing certificate are retained. Physical post-fix VPN verification was not captured; a later USB check is still needed.
 
-The Android DNS-SD fixture advertises inside the emulator and forwards test-only TCP bytes to the Mac Swift peer. Mac publication is tested separately with a real Mac Bonjour browser. These checks cover both platform APIs and transport integration; they do not prove multicast delivery from a physical Pixel to this Mac.
+## Final APK validation
 
-## Regression checks rerun on this source
+**105 Android assertions passed on the isolated Android 17/API 37 emulator:**
 
-- Android clipboard integration: **50 assertions**, including text/images, external transparent Share, reconnect/send, privacy exclusions, background Mac clipboard writes, connection UI, no replacement IME, selected keyboard unchanged, screenshot permission and echo prevention.
-- Optional ADB helper: **33 assertions**, including the actual packaged Mac launcher, new background text/image copies, exact image pixels, sensitive/pairing exclusions, no initial clipboard read, repeated copies, no echo, screenshot round trip, temporary-key rotation and disable/disconnect behavior.
-- Android emulator: API 37, official Google APIs arm64 revision 6, fingerprint `google/sdk_gphone64_arm64/emu64a:17/CE2A.260420.019/15611780:userdebug/dev-keys`; Gboard selected and retained.
-- Java protocol: **19 tests**; Swift protocol: **19 tests**, including a matching fixed discovery-ID vector.
-- Java ↔ Swift TCP: **116 assertions**; listener start/pause/restart: **30 cycles**.
-- Mac private-pasteboard integration: **7 peer assertions plus local checks**. The user's general Mac clipboard was preserved by these test suites.
+- **10 image preparation assertions:** the exact old error is reproduced; the same PNG passes with identical bytes, pixels and dimensions; ordinary non-PNG conversion works; oversized converted output has a clear size error.
+- **11 native layout assertions:** portrait, landscape and keyboard-open spacing, including actual system-bar and IME inset measurements.
+- **52 clipboard integration assertions:** includes the large compact PNG shared from a separate provider through the transparent Activity, encrypted transfer to the real Swift peer, exact returned-byte fingerprint, and no MainActivity foregrounding. Text/images, Share reconnect, Gboard retention, screenshots and privacy exclusions also pass.
+- **32 discovery assertions:** stale address recovery, changed endpoints, real NSD, encrypted Swift round trips, diagnostics and VPN route policy.
 
-The DNS-SD suite was rerun against the final APK after tightening address-input validation; the other Android regressions preceded that validation-only adjustment.
+**Mac native clipboard integration: 7 peer assertions plus local checks passed**, using the same 7,045,193-byte PNG. The production receive path accepted it and wrote exact bytes to an isolated named pasteboard; Mac automatic image/text responses and acknowledgements passed. The user's general Mac clipboard was preserved.
 
-Total Android assertions in this run: **103**. Pure transport tests do not certify network discovery or destination-app compatibility beyond their stated scope.
+Logs include separate **before** reproduction files whose FAIL results are expected, and passing final-build logs. No production pairing material or user screenshots are included.
 
-## Artifacts and compatibility
+## Artifacts and remaining limits
 
-- Android `org.localclip.android`: **0.4.0 (5)**, min API 29, target API 36, development-signed and debuggable. Signature SHA-256 remains `ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98`. Install over the previous APK to retain pairing.
-- Mac: **0.4.0 (5)**, Apple silicon, ad-hoc signed, unnotarized. Installed in /Applications and available as `macos/LocalClip-macOS-arm64.zip`. macOS may ask the updated app to access its existing Keychain pairing key; that protected prompt requires user interaction.
-- Optional helper JAR/launcher remain protocol-compatible. Build source includes editable icon artwork, native ICNS, discovery implementation, tests, scripts and documentation.
-- `LocalClip-source.zip`, `LocalClip-adb-bridge.zip`, `SHA256SUMS.txt`, test logs and parent `LocalClip-MVP.zip` accompany the apps. Private signing keys, production pairing secrets and Git internals are excluded.
+Android **0.4.2 (7)**, min API 29, target API 36. Signature SHA-256 remains `ff2edaf2ef95ce5af3c71c008e114b6b8345ec2c36fca78ff721015c15820b98`. Install over the existing APK to retain pairing. The Pixel was not attached during this final build/test run, so physical screenshot-preview/Photos behavior, its actual failing screenshot and physical insets have not been certified.
 
-## Remaining limits
-
-API 29–36 runtimes were not exercised for this discovery release. A physical Pixel still needs to install this APK and verify recovery on its actual Wi-Fi. AP isolation/multicast blocking can prevent discovery; direct saved addresses and Tailscale names remain available. Existing broken connections may take up to their heartbeat/receive timeout to detect network loss. Cross-network Tailscale delivery, phone wireless-debugging setup, USB-unplug survival, long idle/Doze and physical lock behavior remain unverified. No boot auto-start, persistent queue, work-profile support, QR scanner, forward secrecy, independent security audit or notarization.
+Mac and optional ADB helper binaries are unchanged from 0.4.0. Earlier protocol/helper checks remain in Git history and were not repeated for this patch. Cross-network Tailscale delivery, API 29–36 runtimes, prolonged idle/Doze and wireless debugging remain unverified. The new APK, source, logs, setup instructions and checksums are packaged with the compatible Mac app and helper.

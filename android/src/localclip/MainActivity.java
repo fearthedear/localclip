@@ -33,6 +33,15 @@ public final class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(0xfff3f5fa);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(20),dp(18),dp(20),dp(32));scroll.addView(root);setContentView(scroll);
+        if(Build.VERSION.SDK_INT>=30){
+            getWindow().setDecorFitsSystemWindows(false);
+            scroll.setOnApplyWindowInsetsListener((view,insets)->{
+                android.graphics.Insets safe=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());
+                view.setPadding(safe.left,safe.top,safe.right,safe.bottom);
+                return insets;
+            });
+            scroll.requestApplyInsets();
+        }else scroll.setFitsSystemWindows(true);
         TextView title=label(root,"LocalClip",30);title.setTypeface(null,Typeface.BOLD);
         label(root,"Mac ↔ Android · Keep using Gboard",15).setTextColor(MUTED);
 
@@ -115,8 +124,11 @@ public final class MainActivity extends Activity {
         else if(service==null){title="○  Disconnected";color=0xffa72a35;help="No clipboard is being shared. Tap Connect to Mac, or send an item to reconnect.";}
         else if(App.phase==App.Phase.PAIRING_REJECTED){title="!  Pairing rejected";color=0xffa72a35;help="Disconnect, then copy and save a fresh pairing code from your Mac.";}
         else{title=App.phase==App.Phase.RECONNECTING?"◌  Reconnecting…":"◌  Connecting…";color=0xff9b6500;help=App.status+"\nCheck that the Mac app is sharing and reachable on Wi-Fi or Tailscale.";}
-        if(config!=null)peer.setText(connected?"Using "+service.connectedAddress():"Saved "+config.host+":"+config.port);
-        networkHint.setText(service!=null?service.discoveryState()+"\nWi-Fi address changes are found automatically. Tailscale needs to be on at both ends.":"Wi-Fi discovery finds your paired Mac after its IP changes. For other networks, use its Tailscale MagicDNS name.");
+        if(config!=null)peer.setText(connected?"Using "+service.connectedAddress():service!=null&&!service.attemptingAddress().isEmpty()?"Trying "+service.attemptingAddress():"Saved backup: "+config.host+":"+config.port);
+        if(service!=null){
+            String diagnostics=service.connectionDiagnostics();
+            networkHint.setText(connected?"Authenticated Mac at "+service.connectedAddress():service.discoveryState()+(diagnostics.isEmpty()?"":"\nLast connection attempts:\n"+diagnostics));
+        }else networkHint.setText("Wi-Fi discovery looks for your paired Mac. For other networks, use its Tailscale MagicDNS name with Tailscale on at both ends.");
         status.setText(title);status.setTextColor(color);connectionHelp.setText(help);
         connectionButton.setText(service==null?"Connect to Mac":connected?"Disconnect / pause sharing":"Cancel connection");connectionButton.setEnabled(config!=null);
         sendButton.setText(connected?"Send clipboard to Mac":"Connect & send clipboard");sendButton.setAlpha(config==null?0.5f:1f);

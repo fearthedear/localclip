@@ -1,0 +1,11 @@
+PASS compact PNG fixture fits 8 MiB input limit
+PASS compact PNG is decodable on Android
+PASS native PNG re-encoding succeeds without a size cap
+PASS re-encoding expands a valid PNG beyond 8 MiB (original failure trigger)
+PASS PNG sharing preserves exact bytes without re-encoding
+PASS large PNG dimensions and pixels survive preparation
+PASS non-PNG images still convert to valid PNG
+PASS conversion-overflow fixture fits source byte limit
+PASS PNG conversion overflow reports the size limit instead of an encoder failure
+PASS invalid image bytes are rejected
+Android image preparation: 10 assertions passed on API 37

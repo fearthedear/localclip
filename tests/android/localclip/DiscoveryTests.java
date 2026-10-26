@@ -34,6 +34,10 @@ public final class DiscoveryTests extends Instrumentation {
     @Override public void onStart(){Bundle result=new Bundle();Proxy first=null,second=null;Publication publication=null;
         try{
             c=getTargetContext();nsd=c.getSystemService(NsdManager.class);key=Wire.unhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f");
+            android.net.Network[] available=c.getSystemService(android.net.ConnectivityManager.class).getAllNetworks();
+            check(available.length>0,"test device has a network for local discovery");android.net.Network active=available[0];
+            check(SyncService.routeNetwork(active,false)==active,"discovered Wi-Fi routing retained without a VPN");
+            check(SyncService.routeNetwork(active,true)==null,"active VPN uses normal routing instead of forbidden underlay binding");
             c.getSharedPreferences("settings",0).edit().putBoolean("automatic",false).putBoolean("adbBridge",false).commit();
             int oldPort;try(ServerSocket stale=new ServerSocket(0)){oldPort=stale.getLocalPort();}
             Config.save(c,code("127.0.0.2",oldPort));
@@ -43,10 +47,22 @@ public final class DiscoveryTests extends Instrumentation {
             first=new Proxy();publication=new Publication(first.server.getLocalPort(),"wrong-identity");Publication wrong=publication;
             await("DNS-SD fixture registered",()->wrong.registered);Thread.sleep(2000);
             check(!App.service.connected(),"matching name with wrong TXT identity is ignored");publication.close();await("wrong advertisement removed",()->wrong.removed);
+            publication=new Publication(oldPort,Wire.discoveryID(key));Publication unreachable=publication;
+            await("unreachable paired Mac advertisement registered",()->unreachable.registered);
+            await("discovery reports its resolved address separately from connection",()->App.service.discoveryState().contains(":"+oldPort)&&App.service.connectionDiagnostics().contains(":"+oldPort));
+            check(!App.service.connected(),"discovery alone does not mark the Mac connected");
+            check(App.service.connectionDiagnostics().contains("Connection refused or unreachable"),"failed discovered route exposes the socket failure");
+            runOnMainSync(main::renderConnection);
+            check(main.networkHint.getText().toString().contains("Last connection attempts:"),"connection card displays failure diagnostics");
+            publication.close();await("unreachable advertisement removed",()->unreachable.removed);
             publication=new Publication(first.server.getLocalPort(),Wire.discoveryID(key));Publication valid=publication;int port1=first.server.getLocalPort();
             await("correct paired Mac advertisement registered",()->valid.registered);
             await("stale address automatically replaced by discovered route",()->App.service.connected()&&App.service.connectedAddress().endsWith(":"+port1));
             check(Config.load(c).host.equals("127.0.0.2"),"legacy pairing stays intact; no re-pair required");
+            check(App.service.connectionDiagnostics().isEmpty(),"authenticated connection clears old failures");
+            runOnMainSync(main::renderConnection);
+            check(main.peer.getText().toString().endsWith(":"+port1)&&!main.peer.getText().toString().contains("127.0.0.2"),"connection card shows the authenticated address instead of the stale backup");
+            check(!main.networkHint.getText().toString().contains("Waiting"),"connected card does not show a pending discovery status");
             App.detail="Waiting for discovery text";App.service.send(new Wire.Message(1,"test:discovered-first".getBytes(StandardCharsets.UTF_8)),null);
             await("discovered route completes encrypted Swift clipboard round trip",()->App.detail.startsWith("Received text"));
             ClipboardManager cb=c.getSystemService(ClipboardManager.class);check(cb.getPrimaryClip().getItemAt(0).getText().toString().equals("mac:test:discovered-first"),"discovered peer applies exact text");

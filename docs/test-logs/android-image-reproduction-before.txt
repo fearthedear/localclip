@@ -1,0 +1,5 @@
+PASS compact PNG fixture fits 8 MiB input limit
+PASS compact PNG is decodable on Android
+PASS native PNG re-encoding succeeds without a size cap
+PASS re-encoding expands a valid PNG beyond 8 MiB (original failure trigger)
+FAIL java.lang.Exception: Cannot encode PNG

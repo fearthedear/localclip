@@ -1,10 +1,10 @@
-# Finding the paired Mac — LocalClip 0.4.0
+# Finding the paired Mac — LocalClip 0.4.2
 
 A Wi-Fi address is a route, not a device identity. A Mac moving from `.34` to `.37` should not require pairing again. Version 0.4.0 separates those concerns.
 
 ## Upgrade and reconnect
 
-Install the 0.4.0 APK over the existing APK, update the Mac app, leave Mac sharing started and tap Connect on Android. The package ID, Android development signing certificate, Keystore alias, Mac Keychain item and clipboard encryption protocol are unchanged. Existing pairing codes without the new optional address list remain valid. Local discovery derives its identity hint from the existing secret, so an old stored IP can recover without a new pairing code.
+Install the 0.4.2 APK over the existing APK, keep Mac 0.4.0 or newer, leave Mac sharing started and tap Connect on Android. The package ID, Android development signing certificate, Keystore alias, Mac Keychain item and clipboard encryption protocol are unchanged. Existing pairing codes without the new optional address list remain valid. Local discovery derives its identity hint from the existing secret, so an old stored IP can recover without a new pairing code.
 
 The Android connection card shows **Using host:port** after authentication, rather than displaying a stale saved address as though it were the active connection. **Change address / use Tailscale** edits the endpoint while retaining the same pairing key and reconnects the service. This does not stop a running ADB clipboard helper.
 
@@ -14,7 +14,9 @@ While sharing is started, macOS advertises `_localclip._tcp.` using Bonjour. And
 
 The advertised ID is the first 16 bytes of HMAC-SHA256(pairing key, `LC01/discovery`), encoded as 32 hex characters. It is a public, stable discovery hint, not the pairing key. TXT records contain only `id` and protocol version `v=1`. Another device can observe or copy that hint, so an advertisement is never trusted as proof of identity: the normal nonce/HMAC handshake and AES-GCM transport must succeed before clipboard data is accepted.
 
-Discovered endpoints are tried before saved endpoints, with bounded connection attempts. They are not written into the encrypted pairing record as trusted identities. The source uses Android's resolved Network for local routes, and preserves the normal default network for configured DNS/Tailscale destinations. No subnet scanning, IP guessing, hosted directory or new cloud service is used.
+Discovered endpoints are tried before saved endpoints, with bounded connection attempts. They are not written into the encrypted pairing record as trusted identities. Without an active VPN, the source uses Android's resolved Network for local routes. While a VPN is active, discovered addresses use Android's normal routing, just like configured DNS/Tailscale destinations. A non-bypassable VPN rejects explicit binding to its Wi-Fi underlay with EPERM; this was the cause of a real Pixel connection failure in 0.4.0. LocalClip does not change VPN settings or bypass its policy. No subnet scanning, IP guessing, hosted directory or new cloud service is used.
+
+**Discovered** means an advertisement supplied addresses, not that authentication or a connection succeeded. The Android card lists the discovered endpoints and each failed attempt; **Saved backup** labels the original pairing address. Only **Connected / Using** identifies an authenticated connection. New discoveries interrupt remaining stale route attempts after the current bounded attempt ends.
 
 Bonjour/mDNS generally stays on one local network. Guest Wi-Fi, AP isolation, multicast filtering, VPN policies and denied Local Network permission can prevent discovery or connections. The saved address/name remains usable when direct routing works. Existing connections can still take up to the existing receive/heartbeat timeout to notice a broken network path; discovery does not promise uninterrupted delivery during a network change.
 
@@ -37,3 +39,5 @@ Sources: [Android NSD guide](https://developer.android.com/develop/connectivity/
 ## Validation and limits
 
 Mac tests exercised real Bonjour publication, resolution, TXT records, withdrawal and restart at another port. Android 17 tests used real NSD registration/resolution and a test-only TCP proxy to the actual Swift encrypted peer: a stale address recovered automatically and a changed advertised endpoint reconnected without replacing the pairing key. Test routes are synthetic; this does not certify multicast forwarding between the Mac and a physical Pixel, which needs a device check. Tailscale setup on the physical phone and cross-network delivery remain unverified.
+
+VPN behavior: [Android VpnService.Builder.allowBypass](https://developer.android.com/reference/android/net/VpnService.Builder#allowBypass()).

@@ -14,12 +14,14 @@ public final class MacClipboardPeer {
             Wire.Message reply=crypto.rx.receive(in);if(reply.type!=1||!new String(reply.body,StandardCharsets.UTF_8).equals("mac:test:Mac clipboard 🌏"))throw new AssertionError("Mac automatic local text send");
             out.write(crypto.tx.seal(new Wire.Message(4,reply.id,new byte[0]).encode()));out.flush();
             byte[] png=Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLttAAAAABJRU5ErkJggg==");
+            String fixture=System.getenv("PNG_FIXTURE");if(fixture!=null)png=java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(fixture));
             Wire.Message image=new Wire.Message(2,png);out.write(crypto.tx.seal(image.encode()));out.flush();
             ack=crypto.rx.receive(in);if(ack.type!=4||!Arrays.equals(ack.id,image.id))throw new AssertionError("Mac image acknowledgement");
             reply=crypto.rx.receive(in);if(reply.type!=2)throw new AssertionError("Mac automatic PNG send");
             java.awt.image.BufferedImage decoded=ImageIO.read(new ByteArrayInputStream(reply.body));if(decoded==null||decoded.getWidth()!=2||decoded.getHeight()!=2)throw new AssertionError("Mac PNG dimensions");
             out.write(crypto.tx.seal(new Wire.Message(4,reply.id,new byte[0]).encode()));out.flush();
             System.out.println("Mac app clipboard integration: 7 assertions passed (named pasteboard; text and PNG in both directions, acknowledgements, automatic local send)");
+            if(fixture!=null)System.out.println("Large preserved PNG applied byte-for-byte to Mac private pasteboard: "+png.length+" bytes");
         }
     }
 }

@@ -66,7 +66,7 @@ final class PeerDiscovery implements AutoCloseable {
             if((address instanceof Inet4Address)!=(family==0))continue;
             routes.add(new Endpoint(address.getHostAddress(),info.getPort(),Build.VERSION.SDK_INT>=33?info.getNetwork():null));
         }
-        if(!routes.isEmpty()){found.put(info.getServiceName(),routes);state="Found your paired Mac on Wi-Fi";changed.run();}
+        if(!routes.isEmpty()){found.put(info.getServiceName(),routes);state="Discovered Mac: "+String.join(", ",routes.stream().map(Endpoint::label).toArray(String[]::new))+"\nWaiting for an encrypted connection";changed.run();}
     }
     synchronized List<Endpoint> candidates(Config config){
         LinkedHashMap<String,Endpoint> routes=new LinkedHashMap<>();

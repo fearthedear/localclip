@@ -1,6 +1,9 @@
 package localclip;
 import android.app.*;
 import android.content.*;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.*;
 import java.net.*;
 import java.io.*;
@@ -12,7 +15,10 @@ public final class SyncService extends Service {
     private PeerDiscovery discovery;
     private final Object retryLock=new Object();private long routeRevision;
     private volatile String connectedAddress="";
+    private volatile String attemptingAddress="",connectionDiagnostics="";
     String connectedAddress(){return connectedAddress;}
+    String attemptingAddress(){return attemptingAddress;}
+    String connectionDiagnostics(){return connectionDiagnostics;}
     String discoveryState(){return discovery==null?"":discovery.state();}
     void routesChanged(){synchronized(retryLock){routeRevision++;retryLock.notifyAll();}}
     void reconnect(){Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}routesChanged();}
@@ -73,23 +79,34 @@ public final class SyncService extends Service {
             Socket s=null;
             try{
                 Config c=Config.load(this);if(c==null){status(App.Phase.DISCONNECTED,"Pair with your Mac first");break;}
-                Exception last=null;Connection established=null;
+                Exception last=null,authenticationFailure=null;Connection established=null;
+                java.util.List<String> failures=new java.util.ArrayList<>();
                 java.util.List<PeerDiscovery.Endpoint> routes=discovery==null?java.util.Collections.singletonList(new PeerDiscovery.Endpoint(c.host,c.port,null)):discovery.candidates(c);
                 for(PeerDiscovery.Endpoint endpoint:routes){
                     if(!running.get())break;
                     Socket attempt=new Socket();socket=attempt;
                     try{
+                        attemptingAddress=endpoint.label();
                         status(App.Phase.CONNECTING,"Connecting to "+endpoint.label());
-                        if(endpoint.network!=null)endpoint.network.bindSocket(attempt);
+                        ConnectivityManager networks=getSystemService(ConnectivityManager.class);
+                        NetworkCapabilities activeNetwork=networks.getNetworkCapabilities(networks.getActiveNetwork());
+                        Network route=routeNetwork(endpoint.network,activeNetwork!=null&&activeNetwork.hasTransport(NetworkCapabilities.TRANSPORT_VPN));
+                        if(route!=null)route.bindSocket(attempt);
                         attempt.connect(new InetSocketAddress(endpoint.host,endpoint.port),2500);attempt.setTcpNoDelay(true);attempt.setSoTimeout(4000);
                         Wire.Session crypto=Wire.client(attempt.getInputStream(),attempt.getOutputStream(),c.key);
                         established=new Connection(attempt,crypto,attempt.getOutputStream());connectedAddress=endpoint.label();s=attempt;break;
-                    }catch(Exception e){last=e;try{attempt.close();}catch(IOException ignored){}}
+                    }catch(Exception e){
+                        last=e;if(e instanceof java.security.GeneralSecurityException)authenticationFailure=e;
+                        failures.add(endpoint.label()+" — "+failureReason(e));connectionDiagnostics=String.join("\n",failures);
+                        try{attempt.close();}catch(IOException ignored){}
+                        // A newly discovered route should be tried before the rest of an obsolete snapshot.
+                        synchronized(retryLock){if(routeRevision!=revision)break;}
+                    }
                 }
-                if(established==null)throw last==null?new IOException("No reachable Mac address"):last;
+                if(established==null)throw authenticationFailure!=null?authenticationFailure:last==null?new IOException("No reachable Mac address"):last;
                 InputStream in=s.getInputStream();
                 if(!running.get())break;
-                s.setSoTimeout(45000);Connection active=established;lastResponse=SystemClock.elapsedRealtime();connection=active;delay=1;status(App.Phase.CONNECTED,"Connected to Mac · encrypted");flushShared();
+                s.setSoTimeout(45000);Connection active=established;lastResponse=SystemClock.elapsedRealtime();connection=active;attemptingAddress="";connectionDiagnostics="";delay=1;status(App.Phase.CONNECTED,"Connected to Mac · encrypted");flushShared();
                 while(running.get()&&connection==active){
                     Wire.Message message=active.crypto.rx.receive(in);lastResponse=SystemClock.elapsedRealtime();
                     if(message.type==4){if(pending.remove(Wire.hex(message.id))!=null){App.detail="Mac clipboard updated — ready to paste";if(sharedDeliveries.remove(Wire.hex(message.id)))transferNotice("Shared item delivered to Mac");}}
@@ -100,10 +117,32 @@ public final class SyncService extends Service {
                     }
                 }
             }catch(Exception e){connection=null;if(running.get())status(e instanceof java.security.GeneralSecurityException?App.Phase.PAIRING_REJECTED:App.Phase.RECONNECTING,e instanceof java.security.GeneralSecurityException?"Pairing rejected. Check the Mac pairing code.":"Mac unavailable · searching Wi-Fi and saved addresses · retrying in "+delay+"s");}
-            finally{connection=null;socket=null;if(s!=null)try{s.close();}catch(IOException ignored){}}
+            finally{connection=null;socket=null;attemptingAddress="";if(s!=null)try{s.close();}catch(IOException ignored){}}
             if(running.get())synchronized(retryLock){try{if(routeRevision==revision)retryLock.wait(delay*1000L);}catch(InterruptedException ignored){}delay=Math.min(15,delay*2);}
         }
         if(running.get())App.main.post(this::stopSelf);
+    }
+    static String failureReason(Exception e){
+        if(e instanceof java.security.GeneralSecurityException)return "Pairing authentication failed";
+        if(e instanceof SocketTimeoutException)return "Connection timed out";
+        if(e instanceof ConnectException)return "Connection refused or unreachable";
+        if(e instanceof NoRouteToHostException)return "No route on this network";
+        if(e instanceof UnknownHostException)return "Name could not be resolved";
+        if(e instanceof SecurityException)return "Network access denied; check Android app permissions / VPN";
+        if(e instanceof EOFException)return "Mac closed the connection during authentication";
+        return "Connection failed ("+e.getClass().getSimpleName()+")";
+    }
+    static Network routeNetwork(Network discovered,boolean vpnActive){
+        // A non-bypassable VPN rejects explicit underlay binding with EPERM.
+        // Keep its normal routing policy for discovered addresses as well as saved ones.
+        return vpnActive?null:discovered;
+    }
+    @Override protected void dump(java.io.FileDescriptor fd,java.io.PrintWriter out,String[] args){
+        out.println("LocalClip connection: "+App.status);
+        out.println("Authenticated endpoint: "+connectedAddress);
+        out.println("Attempting endpoint: "+attemptingAddress);
+        out.println(discoveryState());
+        out.println(connectionDiagnostics);
     }
     private void transferNotice(String text){
         getSystemService(NotificationManager.class).notify(1,notification(text));

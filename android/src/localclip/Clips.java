@@ -31,11 +31,23 @@ final class Clips {
         if(options.outWidth<=0||options.outHeight<=0||options.outWidth>16384||options.outHeight>16384||(long)options.outWidth*options.outHeight>MAX_PIXELS)throw new Exception("Image must be at most 16 megapixels");
     }
     static Wire.Message image(byte[] source) throws Exception {
+        if(source.length>Wire.MAX_CONTENT)throw new Exception("Image exceeds 8 MiB");
         checkDimensions(source);Bitmap bitmap=BitmapFactory.decodeByteArray(source,0,source.length);if(bitmap==null)throw new Exception("Cannot decode image");
         try {
-            ByteArrayOutputStream out=new ByteArrayOutputStream(){@Override public synchronized void write(byte[] b,int off,int len){if(count+len>Wire.MAX_CONTENT)throw new IllegalArgumentException("PNG exceeds 8 MiB");super.write(b,off,len);} @Override public synchronized void write(int b){if(count>=Wire.MAX_CONTENT)throw new IllegalArgumentException("PNG exceeds 8 MiB");super.write(b);}};
-            if(!bitmap.compress(Bitmap.CompressFormat.PNG,100,out))throw new Exception("Cannot encode PNG");return new Wire.Message(2,out.toByteArray());
+            // Screenshots already in PNG need no conversion. Re-encoding can expand a
+            // valid compact PNG past the wire limit or change its color metadata.
+            if(source.length>=8&&java.util.Arrays.equals(java.util.Arrays.copyOf(source,8),new byte[]{(byte)137,80,78,71,13,10,26,10}))return new Wire.Message(2,source);
+            ImageOutput out=new ImageOutput();boolean encoded=bitmap.compress(Bitmap.CompressFormat.PNG,100,out);
+            // Android's native encoder can turn an OutputStream exception into false.
+            // Keep the overflow reason instead of misreporting it as an encoder failure.
+            if(out.exceeded)throw new Exception("Converted image exceeds 8 MiB. Share a smaller image.");
+            if(!encoded)throw new Exception("Cannot convert this image to PNG");return new Wire.Message(2,out.bytes.toByteArray());
         }finally{bitmap.recycle();}
+    }
+    private static final class ImageOutput extends OutputStream {
+        final ByteArrayOutputStream bytes=new ByteArrayOutputStream();boolean exceeded;
+        @Override public void write(byte[] b,int off,int len)throws IOException{if(len>Wire.MAX_CONTENT-bytes.size()){exceeded=true;throw new IOException("PNG size limit");}bytes.write(b,off,len);}
+        @Override public void write(int b)throws IOException{if(bytes.size()>=Wire.MAX_CONTENT){exceeded=true;throw new IOException("PNG size limit");}bytes.write(b);}
     }
     static void apply(Context c,Wire.Message m) throws Exception {
         if(!App.unlocked(c))throw new Exception("Phone locked; unlock it and send again from Mac");

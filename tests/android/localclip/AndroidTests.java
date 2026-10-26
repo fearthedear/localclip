@@ -45,7 +45,7 @@ public final class AndroidTests extends Instrumentation {
             await("image round trip acknowledgement",()->App.detail.startsWith("Received image"));
             ClipData clip=cb.getPrimaryClip();Uri imageUri=clip.getItemAt(0).getUri();check(imageUri!=null&&clip.getDescription().hasMimeType("image/png"),"received image uses PNG content URI");
             byte[] received;try(InputStream in=c.getContentResolver().openInputStream(imageUri)){received=Clips.boundedRead(in);}check(Arrays.equals(received,image.body),"image provider exact PNG bytes");
-            // Re-encode source image (the production send path) may encode deterministically on this build.
+            // PNG source bytes are preserved by the production send path.
             Bitmap decoded=BitmapFactory.decodeByteArray(received,0,received.length);check(decoded!=null&&decoded.getWidth()==4&&decoded.getHeight()==3&&decoded.getPixel(0,0)==0xff00aaff,"PNG pixels and dimensions preserved");decoded.recycle();
             App.detail="Waiting for shared image";
             Intent shareImage=new Intent(c,ShareActivity.class).setAction(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM,imageUri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -76,6 +76,10 @@ public final class AndroidTests extends Instrumentation {
             await("image share receiver closes after staging bytes",()->imageHandler.isFinishing()||imageHandler.isDestroyed());
             await("private source URI image delivered after receiver closes",()->App.detail.startsWith("Received image"));
             check(!activity.hasWindowFocus(),"external image share leaves main screen in background");removeMonitor(receiver);
+            byte[] screenshot=ImageTests.indexedPNG(3200,2200);String screenshotDigest=Wire.fingerprint(2,screenshot);
+            App.detail="Waiting for large PNG share";Intent largeShare=new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("share","screenshot").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);c.startActivity(largeShare);
+            await("large compact PNG share completes encrypted Swift round trip",()->App.detail.startsWith("Received image")&&App.lastDigest.equals(screenshotDigest));
+            check(!activity.hasWindowFocus(),"large PNG share keeps MainActivity in background");
             String defaultKeyboard=Settings.Secure.getString(c.getContentResolver(),Settings.Secure.DEFAULT_INPUT_METHOD);
             foreground();
             runOnMainSync(()->{activity.renderConnection();if(!activity.status.getText().toString().contains("Connected to Mac"))throw new AssertionError("Connected badge");});
