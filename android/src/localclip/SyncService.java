@@ -171,7 +171,7 @@ public final class SyncService extends Service {
             // Socket writes have no Java write timeout. Close a stalled connection after 12 seconds.
             ScheduledFuture<?> deadline=heartbeat.schedule(()->{try{active.socket.close();}catch(IOException ignored){}},12,TimeUnit.SECONDS);
             try{
-                if(message.type<=2){pending.put(Wire.hex(message.id),SystemClock.elapsedRealtime());App.detail="Sent "+(message.type==1?"text":"image")+" · waiting for Mac confirmation";}
+                if(message.type<=2){pending.put(Wire.hex(message.id),SystemClock.elapsedRealtime());App.detail="Sent "+(message.type==1?"text":message.resizedImage?"image resized to fit":"image")+" · waiting for Mac confirmation";}
                 synchronized(outputLock){active.out.write(active.crypto.tx.seal(message.encode()));active.out.flush();}
                 if(sent!=null)sent.run();
             }catch(Exception e){if(message.type<=2){pending.remove(Wire.hex(message.id));App.detail="Send failed. Reconnect and send again.";if(sharedDeliveries.remove(Wire.hex(message.id)))transferNotice("Send failed. Share again after reconnecting.");}try{active.socket.close();}catch(IOException ignored){}

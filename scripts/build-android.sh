@@ -10,7 +10,7 @@ mkdir -p "$BUILD/classes" "$BUILD/dex" "$DEST"
 rm -rf "$BUILD/classes" "$BUILD/dex"
 mkdir -p "$BUILD/classes" "$BUILD/dex"
 "$TOOLS/aapt2" compile --dir "$ROOT/android/res" -o "$BUILD/resources.zip"
-"$TOOLS/aapt2" link -o "$BUILD/unsigned.apk" -I "$JAR" --manifest "$ROOT/android/AndroidManifest.xml" "$BUILD/resources.zip" --version-code 7 --version-name 0.4.2 --debug-mode
+"$TOOLS/aapt2" link -o "$BUILD/unsigned.apk" -I "$JAR" --manifest "$ROOT/android/AndroidManifest.xml" "$BUILD/resources.zip" --version-code 8 --version-name 0.4.3 --debug-mode
 find "$ROOT/android/src" -name '*.java' | LC_ALL=C sort > "$BUILD/sources.txt"
 javac -source 8 -target 8 -Xlint:-options -cp "$JAR" -d "$BUILD/classes" @"$BUILD/sources.txt"
 find "$BUILD/classes" -name '*.class' | LC_ALL=C sort > "$BUILD/classes.txt"

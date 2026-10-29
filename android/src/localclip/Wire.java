@@ -35,13 +35,20 @@ public final class Wire {
     public static String fingerprint(int type, byte[] data) throws Exception { return hex(MessageDigest.getInstance("SHA-256").digest(concat(new byte[]{(byte)type},data))); }
     public static final class Message {
         public final int type; public final byte[] id, body;
+        /** Sender-local UI metadata. Not serialized or accepted from the peer. */
+        public final boolean resizedImage;
         public Message(int type, byte[] body) throws Exception { this(type,random(16),body); }
+        public Message(int type, byte[] body,boolean resizedImage) throws Exception { this(type,random(16),body,resizedImage); }
         public Message(int type, byte[] id, byte[] body) throws Exception {
+            this(type,id,body,false);
+        }
+        private Message(int type, byte[] id, byte[] body,boolean resizedImage) throws Exception {
             if(type<1||type>4||id.length!=16||body.length>MAX_CONTENT) throw new IOException("Unsupported or oversized clipboard");
             if(type==1) StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(body));
             if(type==2 && (body.length<8 || !Arrays.equals(Arrays.copyOf(body,8),new byte[]{(byte)137,80,78,71,13,10,26,10}))) throw new IOException("Expected PNG image");
             if(type>=3 && body.length!=0) throw new IOException("Control message has data");
             this.type=type; this.id=id.clone(); this.body=body.clone();
+            this.resizedImage=resizedImage;
         }
         public byte[] encode() throws IOException { return concat(new byte[]{(byte)type},id,body); }
         public static Message decode(byte[] b) throws Exception {

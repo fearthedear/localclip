@@ -28,7 +28,7 @@ public final class ShareActivity extends Activity {
                     Wire.Message message=Clips.read(c,clip);
                     App.main.post(()->{
                         if(isFinishing()||isDestroyed())return;
-                        try{App.handoffShared(this,message);done("Sending to Mac in the background");}
+                        try{App.handoffShared(this,message);done(message.resizedImage?"Large image resized to fit · sending to Mac":"Sending to Mac in the background");}
                         catch(Exception e){done("Could not start sharing. Open LocalClip and try again.");}
                     });
                 }catch(Exception e){App.main.post(()->done(e.getMessage()==null?"Could not read shared item":e.getMessage()));}

@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 
 final class Clips {
     static final int MAX_PIXELS=16_000_000;
+    static final int MAX_IMAGE_SOURCE=32*1024*1024;
     static Wire.Message read(Context c,ClipData clip) throws Exception {
         PersistableBundle extras=clip.getDescription().getExtras();
         if(extras!=null&&extras.getBoolean("android.content.extra.IS_SENSITIVE",false))throw new Exception("Sensitive clipboard skipped");
@@ -15,7 +16,7 @@ final class Clips {
         ClipData.Item item=clip.getItemAt(0);Uri uri=item.getUri();
         if(uri!=null && clip.getDescription().hasMimeType("image/*")) {
             if(!"content".equals(uri.getScheme()))throw new Exception("Only content-provider images are supported");
-            byte[] source;try(InputStream in=c.getContentResolver().openInputStream(uri)){if(in==null)throw new Exception("Image permission unavailable");source=boundedRead(in);}
+            byte[] source;try(InputStream in=c.getContentResolver().openInputStream(uri)){if(in==null)throw new Exception("Image permission unavailable");source=boundedRead(in,MAX_IMAGE_SOURCE);}
             return image(source);
         }
         CharSequence text=item.getText();if(text==null)throw new Exception("Copy text or share an image to LocalClip");
@@ -23,25 +24,38 @@ final class Clips {
         return new Wire.Message(1,text.toString().getBytes(StandardCharsets.UTF_8));
     }
     static byte[] boundedRead(InputStream in) throws Exception {
+        return boundedRead(in,Wire.MAX_CONTENT);
+    }
+    static byte[] boundedRead(InputStream in,int limit) throws Exception {
         ByteArrayOutputStream out=new ByteArrayOutputStream();byte[] b=new byte[16384];int n;
-        while((n=in.read(b))!=-1){if(out.size()+n>Wire.MAX_CONTENT)throw new Exception("Image exceeds 8 MiB");out.write(b,0,n);}return out.toByteArray();
+        while((n=in.read(b))!=-1){if(n>limit-out.size())throw new Exception("Image input exceeds "+limit/(1024*1024)+" MiB");out.write(b,0,n);}return out.toByteArray();
     }
     static void checkDimensions(byte[] b) throws Exception {
         BitmapFactory.Options options=new BitmapFactory.Options();options.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(b,0,b.length,options);
         if(options.outWidth<=0||options.outHeight<=0||options.outWidth>16384||options.outHeight>16384||(long)options.outWidth*options.outHeight>MAX_PIXELS)throw new Exception("Image must be at most 16 megapixels");
     }
     static Wire.Message image(byte[] source) throws Exception {
-        if(source.length>Wire.MAX_CONTENT)throw new Exception("Image exceeds 8 MiB");
+        if(source.length>MAX_IMAGE_SOURCE)throw new Exception("Image input exceeds 32 MiB");
         checkDimensions(source);Bitmap bitmap=BitmapFactory.decodeByteArray(source,0,source.length);if(bitmap==null)throw new Exception("Cannot decode image");
+        boolean resized=false;
         try {
             // Screenshots already in PNG need no conversion. Re-encoding can expand a
             // valid compact PNG past the wire limit or change its color metadata.
-            if(source.length>=8&&java.util.Arrays.equals(java.util.Arrays.copyOf(source,8),new byte[]{(byte)137,80,78,71,13,10,26,10}))return new Wire.Message(2,source);
-            ImageOutput out=new ImageOutput();boolean encoded=bitmap.compress(Bitmap.CompressFormat.PNG,100,out);
-            // Android's native encoder can turn an OutputStream exception into false.
-            // Keep the overflow reason instead of misreporting it as an encoder failure.
-            if(out.exceeded)throw new Exception("Converted image exceeds 8 MiB. Share a smaller image.");
-            if(!encoded)throw new Exception("Cannot convert this image to PNG");return new Wire.Message(2,out.bytes.toByteArray());
+            if(source.length<=Wire.MAX_CONTENT&&source.length>=8&&java.util.Arrays.equals(java.util.Arrays.copyOf(source,8),new byte[]{(byte)137,80,78,71,13,10,26,10}))return new Wire.Message(2,source);
+            for(int attempt=0;attempt<6;attempt++){
+                ImageOutput out=new ImageOutput();boolean encoded=bitmap.compress(Bitmap.CompressFormat.PNG,100,out);
+                // Android can turn the stream's size exception into false. Only a
+                // measured size overflow triggers resizing; genuine encode errors stop.
+                if(!out.exceeded){if(!encoded)throw new Exception("Cannot convert this image to PNG");return new Wire.Message(2,out.bytes.toByteArray(),resized);}
+                long pixels=(long)bitmap.getWidth()*bitmap.getHeight();
+                int bytesPerPixel=bitmap.getConfig()==Bitmap.Config.RGBA_F16?8:bitmap.hasAlpha()?4:3;
+                long target=Math.min(pixels*3/4,(Wire.MAX_CONTENT-128*1024)/bytesPerPixel);
+                double scale=Math.sqrt((double)target/pixels);
+                int width=Math.max(1,(int)(bitmap.getWidth()*scale)),height=Math.max(1,(int)(bitmap.getHeight()*scale));
+                if(width==bitmap.getWidth()&&height==bitmap.getHeight())break;
+                Bitmap smaller=Bitmap.createScaledBitmap(bitmap,width,height,true);bitmap.recycle();bitmap=smaller;resized=true;
+            }
+            throw new Exception("Cannot fit this image into a clipboard transfer");
         }finally{bitmap.recycle();}
     }
     private static final class ImageOutput extends OutputStream {

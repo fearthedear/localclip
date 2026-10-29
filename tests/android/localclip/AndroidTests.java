@@ -80,6 +80,11 @@ public final class AndroidTests extends Instrumentation {
             App.detail="Waiting for large PNG share";Intent largeShare=new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("share","screenshot").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);c.startActivity(largeShare);
             await("large compact PNG share completes encrypted Swift round trip",()->App.detail.startsWith("Received image")&&App.lastDigest.equals(screenshotDigest));
             check(!activity.hasWindowFocus(),"large PNG share keeps MainActivity in background");
+            Wire.Message fitted=Clips.image(ImageTests.noisyJPEG());String fittedDigest=Wire.fingerprint(2,fitted.body);
+            check(fitted.resizedImage,"external JPEG fixture requires automatic resizing");
+            App.detail="Waiting for resized JPEG share";Intent photoShare=new Intent().setComponent(new ComponentName("org.localclip.tests","localclip.SourceActivity")).putExtra("share","photo").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);c.startActivity(photoShare);
+            await("previously oversized conversion shares through encrypted Swift peer",()->App.detail.startsWith("Received image")&&App.lastDigest.equals(fittedDigest));
+            check(!activity.hasWindowFocus(),"resized image share leaves MainActivity in background");
             String defaultKeyboard=Settings.Secure.getString(c.getContentResolver(),Settings.Secure.DEFAULT_INPUT_METHOD);
             foreground();
             runOnMainSync(()->{activity.renderConnection();if(!activity.status.getText().toString().contains("Connected to Mac"))throw new AssertionError("Connected badge");});
