@@ -9,4 +9,5 @@
     <instrumentation android:name="localclip.DiscoveryTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
     <instrumentation android:name="localclip.ImageTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
     <instrumentation android:name="localclip.LayoutTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
+    <instrumentation android:name="localclip.TailnetTests" android:targetPackage="org.localclip.android" android:functionalTest="true"/>
 </manifest>

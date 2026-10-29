@@ -1,43 +1,37 @@
-# Finding the paired Mac — LocalClip 0.4.2
+# Tailscale first and automatic tailnet discovery — LocalClip 0.5.0
 
-A Wi-Fi address is a route, not a device identity. A Mac moving from `.34` to `.37` should not require pairing again. Version 0.4.0 separates those concerns.
+Keep both devices signed in to the same tailnet with Tailscale enabled. On the Mac, Start sharing; on Android, Connect to Mac. Existing pairing works without re-pairing. The Mac must stay awake, and Android's connection service must remain running.
 
-## Upgrade and reconnect
+## How discovery works
 
-Install the 0.4.2 APK over the existing APK, keep Mac 0.4.0 or newer, leave Mac sharing started and tap Connect on Android. The package ID, Android development signing certificate, Keystore alias, Mac Keychain item and clipboard encryption protocol are unchanged. Existing pairing codes without the new optional address list remain valid. Local discovery derives its identity hint from the existing secret, so an old stored IP can recover without a new pairing code.
+Bonjour does not provide tailnet-wide discovery. While sharing, the Mac reads the installed `/Applications/Tailscale.app/Contents/MacOS/Tailscale status --json`, validates BackendState and Self.TailscaleIPs against this Mac's actual interfaces, and selects its stable MagicDNS name (or verified Tailscale IPv4 address) automatically for pairing.
 
-The Android connection card shows **Using host:port** after authentication, rather than displaying a stale saved address as though it were the active connection. **Change address / use Tailscale** edits the endpoint while retaining the same pairing key and reconnects the service. This does not stop a running ADB clipboard helper.
+Every 15 seconds it sends a 74-byte UDP unicast message to port **47390** on up to 64 online peers returned by the local Tailscale client. Only numeric addresses in Tailscale's 100.64.0.0/10 range are used. There is no subnet sweep, guessed address list, Tailscale admin token, embedded VPN, or new LocalClip internet service.
 
-## Same Wi-Fi: automatic discovery
+The Android connection service listens for these messages while connected/connecting. A valid message supplies the Mac's current Tailscale address and clipboard port. The phone prioritizes this route and makes the normal authenticated encrypted TCP connection back to the Mac. A reachable tailnet route also replaces an active Wi-Fi fallback. If Tailscale cannot carry TCP, Wi-Fi remains available; promotion retries are throttled while a fallback is active.
 
-While sharing is started, macOS advertises `_localclip._tcp.` using Bonjour. Android's native Network Service Discovery finds matching advertisements and resolves current addresses and ports. Android 14+ uses service-info updates to track changes; Android 10–13 uses the older resolution API. Pausing Mac sharing withdraws the advertisement; disconnecting Android stops its discovery listener.
+After the TCP handshake succeeds, Android remembers the numeric Tailscale endpoint in its existing encrypted pairing record. This does not replace the pairing secret, discard all Wi-Fi backups, or require a fresh pairing code. It can reconnect after an app restart before another discovery message arrives. Cached tailnet routes and configured MagicDNS names are tried ahead of Wi-Fi routes.
 
-The advertised ID is the first 16 bytes of HMAC-SHA256(pairing key, `LC01/discovery`), encoded as 32 hex characters. It is a public, stable discovery hint, not the pairing key. TXT records contain only `id` and protocol version `v=1`. Another device can observe or copy that hint, so an advertisement is never trusted as proof of identity: the normal nonce/HMAC handshake and AES-GCM transport must succeed before clipboard data is accepted.
+The Mac listens for clipboard connections and reports **Phone connected · Tailscale · encrypted** when the authenticated peer uses its Tailscale address. Android's service notification reports the same transport. Discovery itself is never a clipboard delivery confirmation.
 
-Discovered endpoints are tried before saved endpoints, with bounded connection attempts. They are not written into the encrypted pairing record as trusted identities. Without an active VPN, the source uses Android's resolved Network for local routes. While a VPN is active, discovered addresses use Android's normal routing, just like configured DNS/Tailscale destinations. A non-bypassable VPN rejects explicit binding to its Wi-Fi underlay with EPERM; this was the cause of a real Pixel connection failure in 0.4.0. LocalClip does not change VPN settings or bypass its policy. No subnet scanning, IP guessing, hosted directory or new cloud service is used.
+## Authentication and privacy
 
-**Discovered** means an advertisement supplied addresses, not that authentication or a connection succeeded. The Android card lists the discovered endpoints and each failed attempt; **Saved backup** labels the original pairing address. Only **Connected / Using** identifies an authenticated connection. New discoveries interrupt remaining stale route attempts after the current bounded attempt ends.
+The discovery packet is `LCD1 || nonce[32] || tcpPort[2] || macIPv4[4] || proof[32]`. Proof is HMAC-SHA256(pairing key, `LC01/tailnet-discovery || nonce || tcpPort || macIPv4`). The phone requires an exact-size packet, a tailnet source, a matching source address covered by that proof, and the current pairing key. This prevents another peer from redirecting the phone by relaying a message from its own address. A bounded cache ignores the most recent 128 nonces. Discovery is only a routing hint: a fresh nonce/HMAC TCP handshake and AES-GCM session must succeed before any clipboard data moves or a route is persisted.
 
-Bonjour/mDNS generally stays on one local network. Guest Wi-Fi, AP isolation, multicast filtering, VPN policies and denied Local Network permission can prevent discovery or connections. The saved address/name remains usable when direct routing works. Existing connections can still take up to the existing receive/heartbeat timeout to notice a broken network path; discovery does not promise uninterrupted delivery during a network change.
+Messages contain no clipboard data, pairing secret, Tailscale credentials or peer directory. Visible tailnet peers can observe discovery traffic and its sender address/port. The Mac reads peer metadata locally and does not publish it. Pausing Mac sharing stops the announcer; disconnecting Android closes its UDP listener. Secret rotation invalidates the existing phone's discovery proof until it is paired again.
 
-## Across networks: Tailscale MagicDNS
+## Network requirements and limits
 
-Connect both devices to the same tailnet and permit TCP 47391 between them. In the Mac app, choose **Use this Mac’s Tailscale name**. Then either enter the displayed full name on Android through **Change address / use Tailscale**, or use the Mac's newly copied pairing code during initial setup.
+Allow **UDP 47390 Mac → phone** for discovery and **TCP 47391 phone → Mac** for clipboard traffic in your tailnet policy. LocalClip never changes ACLs, disables VPN protections or exposes a public Funnel endpoint. Tailscale must include LocalClip in its Android routing; restrictive split-tunneling / incoming-connection settings can prevent access. Discovery currently uses Tailscale IPv4 addresses. Tailnets with more than 64 visible online peers need a configured/cached Mac address if it falls outside the bounded discovery list.
 
-The Mac button reads the installed Tailscale app's `status --json` output, verifies that its Self addresses belong to this Mac's active interfaces, and selects its full MagicDNS name. It does not change the Tailscale account, permissions or ACLs. If the CLI is unavailable or inactive, paste the name manually. The selected name is remembered across Mac launches.
+The Mac integration expects Tailscale in Applications. If CLI access or discovery is unavailable, Android can still use a saved Tailscale IP/MagicDNS name via **Change address / use Tailscale**. Tailscale supplies the existing overlay network and may use coordination/DERP infrastructure. LocalClip adds no cloud account or hosted directory.
 
-[Tailscale MagicDNS](https://tailscale.com/docs/features/magicdns) supplies the hostname; [Tailscale addresses](https://tailscale.com/kb/1033/ip-and-dns-addresses/) remain stable as a device moves between underlying networks. Both devices must have Tailscale enabled. Bonjour discovery is not treated as a tailnet-wide discovery protocol. Changing tailnets, removing/recreating a Tailscale device or renaming it can require updating the saved name.
+Bonjour/Android NSD remains available on the same local network and identifies the paired Mac using a domain-separated secret-derived public hint. Its IP suggestions still require the encrypted handshake. AP isolation and multicast filtering can block this fallback. A broken connection can take up to the receive/heartbeat timeout to reconnect. Neither path guarantees delivery while the Mac is asleep, either device is offline, or Android's connection service is stopped.
 
-LocalClip keeps its own authenticated encryption over the tailnet. Tailscale may use its coordination/DERP infrastructure; this feature adds no LocalClip internet service. Local Wi-Fi discovery works without Tailscale.
+## Validation
 
-## Pairing format and privacy
+The isolated Android 17 emulator exercised actual UDP reception on synthetic tailnet-shaped loopback aliases, route promotion over an active fallback, encrypted Swift transfer, paired-key/source/duplicate rejection, encrypted route persistence and restart without a new beacon. These aliases are test-only; no real tailnet IPs were added to the host.
 
-The v1 JSON pairing payload still requires `v`, `host`, `port` and `key`. New codes optionally include `hosts`, with up to six explicit addresses/names. Old APKs ignore this optional field and continue using `host`; upgrading both sides enables discovery and alternate routes. A Mac only advertises while sharing is enabled. Secret rotation also changes its discovery ID. The public ID can link advertisements to the same paired installation until rotation.
+On the physical Pixel, the production apps discovered each other using their real Tailscale addresses and authenticated successfully. With Wi-Fi disabled by the user, Android reported a CELLULAR|VPN underlay and continued exchanging authenticated heartbeat responses over the tailnet. See TEST-RESULTS.md for the final evidence and remaining limits.
 
-Sources: [Android NSD guide](https://developer.android.com/develop/connectivity/wifi/use-nsd), [NsdManager API](https://developer.android.com/reference/android/net/nsd/NsdManager), [Apple NetService](https://developer.apple.com/documentation/foundation/netservice).
-
-## Validation and limits
-
-Mac tests exercised real Bonjour publication, resolution, TXT records, withdrawal and restart at another port. Android 17 tests used real NSD registration/resolution and a test-only TCP proxy to the actual Swift encrypted peer: a stale address recovered automatically and a changed advertised endpoint reconnected without replacing the pairing key. Test routes are synthetic; this does not certify multicast forwarding between the Mac and a physical Pixel, which needs a device check. Tailscale setup on the physical phone and cross-network delivery remain unverified.
-
-VPN behavior: [Android VpnService.Builder.allowBypass](https://developer.android.com/reference/android/net/VpnService.Builder#allowBypass()).
+Sources: [Tailscale CLI](https://tailscale.com/docs/reference/tailscale-cli), [Tailscale connection basics](https://tailscale.com/docs/how-to/connect-to-devices), [Android VPN policy](https://developer.android.com/reference/android/net/VpnService.Builder#allowBypass()).

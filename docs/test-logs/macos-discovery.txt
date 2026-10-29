@@ -1,0 +1,6 @@
+PASS Bonjour advertisement resolves with the actual listener port
+PASS discovery identity and version survive DNS-SD
+PASS advertisement contains no pairing secret
+PASS pausing removes the Bonjour advertisement
+PASS restarting publishes the new port under the same identity
+Mac Bonjour integration: 5 assertions passed

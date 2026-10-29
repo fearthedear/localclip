@@ -8,6 +8,16 @@ enum LCError: Error, CustomStringConvertible {
 }
 enum Wire {
     static func discoveryID(_ key: Data) -> String { hex(Data(mac(key,"discovery",Data(),Data()).prefix(16))) }
+    static func tailnetIP(_ host: String) -> Bool {
+        let parts=host.split(separator:".",omittingEmptySubsequences:false)
+        guard parts.count==4,parts[0]=="100",parts.allSatisfy({ !$0.isEmpty && $0.count<=3 && $0.allSatisfy({$0.isASCII && $0.isNumber}) && (Int($0) ?? 256)<=255 }),let second=Int(parts[1]) else { return false }
+        return (64...127).contains(second)
+    }
+    static func tailnetBeacon(_ key: Data,nonce: Data,host: String,port: UInt16)throws -> Data {
+        guard nonce.count==32,tailnetIP(host),port>=1024 else { throw LCError.invalid("Invalid discovery packet") }
+        let endpoint=Data([UInt8(port>>8),UInt8(port&255)])+Data(host.split(separator:".").map{UInt8($0)!})
+        return Data("LCD1".utf8)+nonce+endpoint+mac(key,"tailnet-discovery",nonce,endpoint)
+    }
     static let magic = Data("LC01".utf8)
     static let maxContent = 8 * 1024 * 1024
     static let maxFrame = maxContent + 17 + 16

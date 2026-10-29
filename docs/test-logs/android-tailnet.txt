@@ -1,0 +1,19 @@
+PASS paired tailnet beacon accepted
+PASS recent duplicate nonce ignored
+PASS relayed beacon from another tailnet peer rejected
+PASS LAN source cannot advertise a tailnet route
+PASS unpaired tailnet beacon rejected
+PASS closed discovery ignores future beacons
+PASS saved MagicDNS route precedes Wi-Fi addresses
+PASS fresh tailnet route wins and respects VPN routing
+PASS fallback connection initially authenticates
+PASS wrong-key UDP cannot replace the connected route
+PASS real authenticated UDP promotes the tailnet route over the active fallback
+PASS authenticated route remembered without replacing the pairing key
+PASS discovered route completes an encrypted Swift round trip
+PASS duplicate UDP does not disrupt the authenticated connection
+PASS old or mismatched pairing cannot overwrite a remembered route
+PASS disconnect stops tailnet discovery
+PASS remembered tailnet route reconnects after restart without a new beacon
+PASS final disconnect completes
+Android tailnet discovery: 18 assertions passed on API 37 (synthetic loopback aliases, real UDP/TCP/Swift)

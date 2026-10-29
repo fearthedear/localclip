@@ -30,6 +30,8 @@ enum ImageCheck {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let server=ClipServer()
     let discovery=DiscoveryAdvertiser()
+    let tailnet=TailnetAnnouncer()
+    let tailnetStatus=NSTextField(wrappingLabelWithString:"Tailscale discovery paused")
     let discoveryStatus=NSTextField(wrappingLabelWithString:"Local discovery paused")
     var window: NSWindow!
     var statusItem: NSStatusItem!
@@ -64,8 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let title=NSTextField(labelWithString:"LocalClip"); title.font = .systemFont(ofSize:28,weight:.semibold); root.addArrangedSubview(title)
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Private clipboard between this Mac and your Android. Text and PNG images, directly between your devices."))
         status.font = .systemFont(ofSize:14,weight:.semibold); root.addArrangedSubview(status)
-        root.addArrangedSubview(NSTextField(labelWithString:"Mac address (choose a Wi-Fi IP or Tailscale address):"))
-        host.stringValue=UserDefaults.standard.string(forKey:"preferredHost") ?? localAddresses().first ?? ""; root.addArrangedSubview(host); host.widthAnchor.constraint(equalTo:root.widthAnchor).isActive=true
+        root.addArrangedSubview(NSTextField(labelWithString:"Mac address (Tailscale preferred automatically):"))
+        host.stringValue=localAddresses().first(where:Wire.tailnetIP) ?? UserDefaults.standard.string(forKey:"preferredHost") ?? localAddresses().first ?? ""; root.addArrangedSubview(host); host.widthAnchor.constraint(equalTo:root.widthAnchor).isActive=true
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Available: " + localAddresses().joined(separator:", ")))
         let actions=NSStackView(); actions.spacing=10
         for (title,action) in [("Start sharing",#selector(start)),("Pause",#selector(pause)),("Send current clipboard",#selector(sendCurrent))] { actions.addArrangedSubview(NSButton(title:title,target:self,action:action)) }; root.addArrangedSubview(actions)
@@ -75,8 +77,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.addArrangedSubview(pairActions)
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Paste the pairing code into LocalClip on Android. Treat it like a password. Port: 47391. Only one paired phone is supported."))
         let tailButton=NSButton(title:"Use this Mac’s Tailscale name",target:self,action:#selector(useTailscale))
-        root.addArrangedSubview(tailButton);root.addArrangedSubview(discoveryStatus)
+        root.addArrangedSubview(tailButton);root.addArrangedSubview(tailnetStatus);root.addArrangedSubview(discoveryStatus)
         discovery.onStatus={ [weak self] text in self?.discoveryStatus.stringValue=text }
+        tailnet.onStatus={ [weak self] snapshot,text in
+            guard let self else { return };self.tailnetStatus.stringValue=text
+            if let snapshot { self.host.stringValue=snapshot.name;UserDefaults.standard.set(snapshot.name,forKey:"preferredHost") }
+        }
         root.addArrangedSubview(detail)
         root.addArrangedSubview(NSTextField(wrappingLabelWithString:"Keep Gboard on Android. For automatic copying, enable the optional ADB helper in Android LocalClip and run the supplied Mac launcher. Without it: Share → LocalClip, or open LocalClip and tap Send clipboard.\n\nMac → phone is automatic while sharing and the Android connection service are running and the phone is unlocked. Neither device keeps a clipboard history. The Mac must stay awake. Allow clipboard access and local network access when macOS asks."))
         for view in root.arrangedSubviews { if let field = view as? NSTextField, field !== host { field.maximumNumberOfLines=0; field.lineBreakMode = .byWordWrapping; field.widthAnchor.constraint(equalTo:root.widthAnchor).isActive=true } }
@@ -95,9 +101,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !running else { return }
         do { runID+=1; let id=runID
             server.onMessage={ [weak self] message in DispatchQueue.main.async { guard let self, self.runID==id else { return }; self.receive(message) } }
-            lastChange=board.changeCount; try server.start(secret:secret,port:47391); running=true; if !testMode { discovery.start(secret:secret,port:47391) }; statusItem.button?.title="⇄ Clip •" } catch { showError(error) }
+            lastChange=board.changeCount; try server.start(secret:secret,port:47391); running=true; if !testMode { discovery.start(secret:secret,port:47391);tailnet.start(secret:secret,port:47391,addresses:localAddresses) }; statusItem.button?.title="⇄ Clip •" } catch { showError(error) }
     }
-    @objc func pause() { runID+=1; server.stop(); discovery.stop(); running=false; pending.removeAll(); status.stringValue="Sharing paused"; statusItem.button?.title="⇄ Clip" }
+    @objc func pause() { runID+=1; server.stop(); discovery.stop(); tailnet.stop(); tailnetStatus.stringValue="Tailscale discovery paused"; running=false; pending.removeAll(); status.stringValue="Sharing paused"; statusItem.button?.title="⇄ Clip" }
     @objc func quit() { NSApp.terminate(nil) }
     @objc func rotate() {
         pause()
@@ -169,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func showError(_ error: Error) { let a=NSAlert(); a.messageText="LocalClip"; a.informativeText=String(describing:error); a.runModal() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool { false }
-    func applicationWillTerminate(_ notification: Notification) { server.stop();discovery.stop() }
+    func applicationWillTerminate(_ notification: Notification) { server.stop();discovery.stop();tailnet.stop() }
 }
 func localAddresses() -> [String] {
     var list: UnsafeMutablePointer<ifaddrs>?; guard getifaddrs(&list)==0 else { return [] }; defer{ freeifaddrs(list) }

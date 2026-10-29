@@ -20,6 +20,7 @@ final class PeerDiscovery implements AutoCloseable {
     private final Map<String,NsdManager.ServiceInfoCallback> callbacks=new HashMap<>();
     private boolean closed,started;
     private final Set<String> resolving=new HashSet<>();
+    private Endpoint tailnet;
     private volatile String state="Looking for your paired Mac on Wi-Fi…";
     PeerDiscovery(Context c,byte[] key,Runnable changed)throws Exception{manager=c.getSystemService(NsdManager.class);id=Wire.discoveryID(key);this.changed=changed;}
     String state(){return state;}
@@ -70,9 +71,16 @@ final class PeerDiscovery implements AutoCloseable {
     }
     synchronized List<Endpoint> candidates(Config config){
         LinkedHashMap<String,Endpoint> routes=new LinkedHashMap<>();
+        if(tailnet!=null)routes.put(tailnet.label(),tailnet);
+        for(String host:config.hosts)if(Wire.tailnetHost(host)){Endpoint e=new Endpoint(host,config.port,null);routes.putIfAbsent(e.label(),e);}
         for(List<Endpoint> group:found.values())for(Endpoint e:group)if(routes.size()<4)routes.put(e.label(),e);
         for(String host:config.hosts){Endpoint e=new Endpoint(host,config.port,null);if(routes.size()<8)routes.putIfAbsent(e.label(),e);}
         return new ArrayList<>(routes.values());
+    }
+    synchronized boolean offerTailnet(String host,int port){
+        if(closed||!Wire.tailnetIP(host)||port<1024||port>65535)return false;
+        if(tailnet!=null&&tailnet.host.equals(host)&&tailnet.port==port)return false;
+        tailnet=new Endpoint(host,port,null);changed.run();return true;
     }
     private void stopDiscovery(){try{manager.stopServiceDiscovery(listener);}catch(IllegalArgumentException ignored){}}
     @Override public synchronized void close(){

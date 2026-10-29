@@ -61,3 +61,9 @@ Source bodies are at most 8 MiB. Android image decoding also applies the existin
 ## Local discovery (0.4.0)
 
 The clipboard TCP protocol is unchanged. Bonjour advertises `_localclip._tcp.` with service name `LocalClip-<id>` (subject to OS conflict suffixes), TXT `id=<id>`, and `v=1`. ID = lowercase hex of the first 16 bytes of HMAC-SHA256(secret, ASCII `LC01/discovery`). Advertised ports must be 1024–65535; Android verifies the expected ID and TXT version before treating the result as a candidate, then authenticates the TCP peer normally. The v1 pairing JSON optionally carries `hosts`, up to six explicit route strings; required `host`, `port`, `key` and `v` fields remain unchanged. Discovery never supplies or rotates a secret.
+
+## Tailnet discovery (0.5.0)
+
+UDP destination 47390. Exact 74-byte packet: ASCII `LCD1`, 32-byte random nonce, unsigned big-endian 16-bit clipboard TCP port, 4-byte Mac Tailscale IPv4, 32-byte proof. Proof is HMAC-SHA256(secret, ASCII `LC01/tailnet-discovery` || nonce || port || IPv4). The receiver rejects non-tailnet sources, mismatched source addresses, invalid sizes/ports, unpaired proofs and recent duplicate nonces. No clipboard data or secret is carried. A normal fresh TCP handshake is still mandatory before data or persistent route changes. See NETWORKING.md for lifecycle, limits and tailnet policy.
+
+Android image preparation may read up to 32 MiB from an explicitly shared image provider; the decoded 16-megapixel and transmitted 8 MiB bounds remain. Resizing metadata is sender-local UI state and is not part of the clipboard wire format. The optional ADB helper's own input bound remains 8 MiB.

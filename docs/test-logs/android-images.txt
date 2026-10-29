@@ -6,6 +6,13 @@ PASS PNG sharing preserves exact bytes without re-encoding
 PASS large PNG dimensions and pixels survive preparation
 PASS non-PNG images still convert to valid PNG
 PASS conversion-overflow fixture fits source byte limit
-PASS PNG conversion overflow reports the size limit instead of an encoder failure
+PASS previously failing JPEG now fits the encrypted transfer limit
+PASS oversized conversion becomes a smaller valid PNG
+PASS resizing preserves image aspect ratio
+PASS sender UI metadata identifies only resized images
+PASS resize UI metadata does not change the network protocol
+PASS oversized PNG fixture fits the bounded source allowance
+PASS PNG source over 8 MiB is resized into a valid transfer
+PASS image source reader enforces its configured byte bound
 PASS invalid image bytes are rejected
-Android image preparation: 10 assertions passed on API 37
+Android image preparation: 17 assertions passed on API 37

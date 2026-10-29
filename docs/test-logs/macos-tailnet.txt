@@ -1,0 +1,6 @@
+PASS verified self supplies stable Tailscale pairing address
+PASS discovery targets only online numeric tailnet peers
+PASS unbound or stale self address rejected
+PASS unexpected status response rejected
+PASS native UDP sender transmits exact authenticated discovery bytes
+Mac tailnet discovery: 5 assertions passed

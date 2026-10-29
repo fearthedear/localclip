@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0
+
+- Prefer Tailscale routes and addresses on both apps, retaining local Wi-Fi fallback.
+- Mac reads the installed Tailscale client’s actual Self/Peer status, verifies its local address and sends authenticated unicast discovery messages to up to 64 online visible peers every 15 seconds while sharing.
+- Android accepts only source-bound, paired-key discovery messages from tailnet addresses, ignores recent duplicate nonces, and still authenticates every clipboard TCP connection. No Tailscale API token, embedded VPN or new cloud service.
+- Promote a live Wi-Fi fallback to a discovered Tailscale route; remember that route only after successful authentication without changing the pairing key.
+- Retain the image resizing and system-bar fixes.
+
+## 0.4.3
+
+- Automatically resize oversized Android PNG conversions instead of rejecting them. Preserve aspect ratio and report when resolution is reduced.
+- Accept shared image inputs up to 32 MiB while keeping the 16 megapixel decode and 8 MiB wire limits. Existing fitting PNGs stay unchanged.
+
 ## 0.4.2
 
 - Preserve validated PNG screenshot bytes instead of re-encoding them, which could expand a valid image past the 8 MiB limit and produce “Cannot encode PNG”. No resizing or image-quality loss for existing PNGs.

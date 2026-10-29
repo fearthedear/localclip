@@ -13,13 +13,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class SyncService extends Service {
     private AdbBridge bridge;
     private PeerDiscovery discovery;
+    private TailnetDiscovery tailnetDiscovery;
+    private long lastTailnetPromotion;
     private final Object retryLock=new Object();private long routeRevision;
     private volatile String connectedAddress="";
     private volatile String attemptingAddress="",connectionDiagnostics="";
     String connectedAddress(){return connectedAddress;}
     String attemptingAddress(){return attemptingAddress;}
     String connectionDiagnostics(){return connectionDiagnostics;}
-    String discoveryState(){return discovery==null?"":discovery.state();}
+    String discoveryState(){return (tailnetDiscovery==null?"":tailnetDiscovery.state()+"\n")+(discovery==null?"":discovery.state());}
     void routesChanged(){synchronized(retryLock){routeRevision++;retryLock.notifyAll();}}
     void reconnect(){Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}routesChanged();}
     static final String CHANNEL="localclip.connection";
@@ -61,6 +63,12 @@ public final class SyncService extends Service {
         refreshBridge();
         if(running.compareAndSet(false,true)){
             try{Config config=Config.load(this);if(config!=null){discovery=new PeerDiscovery(this,config.key,this::routesChanged);discovery.start();}}catch(Exception e){App.detail="Wi-Fi discovery unavailable; using saved address";}
+            try{Config config=Config.load(this);if(config!=null){tailnetDiscovery=new TailnetDiscovery(config.key,(host,port)->{
+                PeerDiscovery d=discovery;if(d==null)return;boolean changed=d.offerTailnet(host,port);
+                if(!connected()){routesChanged();return;}
+                long now=SystemClock.elapsedRealtime();
+                if(!Wire.tailnetHost(connectedAddress.split(":",2)[0])&&(changed||now-lastTailnetPromotion>=30000)){lastTailnetPromotion=now;reconnect();}
+            });tailnetDiscovery.start();}}catch(Exception e){App.detail="Tailnet discovery unavailable; using saved addresses";}
             new Thread(this::connectLoop,"localclip-connection").start();
             heartbeat.scheduleAtFixedRate(()->{
                 if(connection!=null)try{send(new Wire.Message(3,new byte[0]),null);}catch(Exception ignored){}
@@ -94,7 +102,8 @@ public final class SyncService extends Service {
                         if(route!=null)route.bindSocket(attempt);
                         attempt.connect(new InetSocketAddress(endpoint.host,endpoint.port),2500);attempt.setTcpNoDelay(true);attempt.setSoTimeout(4000);
                         Wire.Session crypto=Wire.client(attempt.getInputStream(),attempt.getOutputStream(),c.key);
-                        established=new Connection(attempt,crypto,attempt.getOutputStream());connectedAddress=endpoint.label();s=attempt;break;
+                        established=new Connection(attempt,crypto,attempt.getOutputStream());connectedAddress=endpoint.label();s=attempt;
+                        try{Config.rememberTailnet(this,c,endpoint.host,endpoint.port);}catch(Exception ignored){App.detail="Connected; could not remember the tailnet route";}break;
                     }catch(Exception e){
                         last=e;if(e instanceof java.security.GeneralSecurityException)authenticationFailure=e;
                         failures.add(endpoint.label()+" — "+failureReason(e));connectionDiagnostics=String.join("\n",failures);
@@ -106,7 +115,7 @@ public final class SyncService extends Service {
                 if(established==null)throw authenticationFailure!=null?authenticationFailure:last==null?new IOException("No reachable Mac address"):last;
                 InputStream in=s.getInputStream();
                 if(!running.get())break;
-                s.setSoTimeout(45000);Connection active=established;lastResponse=SystemClock.elapsedRealtime();connection=active;attemptingAddress="";connectionDiagnostics="";delay=1;status(App.Phase.CONNECTED,"Connected to Mac · encrypted");flushShared();
+                s.setSoTimeout(45000);Connection active=established;lastResponse=SystemClock.elapsedRealtime();connection=active;attemptingAddress="";connectionDiagnostics="";delay=1;status(App.Phase.CONNECTED,"Connected to Mac · "+(Wire.tailnetHost(s.getInetAddress().getHostAddress())?"Tailscale · ":"")+"encrypted");flushShared();
                 while(running.get()&&connection==active){
                     Wire.Message message=active.crypto.rx.receive(in);lastResponse=SystemClock.elapsedRealtime();
                     if(message.type==4){if(pending.remove(Wire.hex(message.id))!=null){App.detail="Mac clipboard updated — ready to paste";if(sharedDeliveries.remove(Wire.hex(message.id)))transferNotice("Shared item delivered to Mac");}}
@@ -178,6 +187,6 @@ public final class SyncService extends Service {
             }finally{deadline.cancel(false);}
         });}catch(RejectedExecutionException e){throw new Exception("Connection busy. Send again.");}
     }
-    @Override public void onDestroy(){running.set(false);routesChanged();if(discovery!=null)discovery.close();synchronized(this){if(bridge!=null){bridge.close();bridge=null;}}running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();sharedDeliveries.clear();synchronized(sharedLock){sharedItem=null;}if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
+    @Override public void onDestroy(){running.set(false);routesChanged();if(discovery!=null)discovery.close();if(tailnetDiscovery!=null)tailnetDiscovery.close();synchronized(this){if(bridge!=null){bridge.close();bridge=null;}}running.set(false);connection=null;Socket s=socket;if(s!=null)try{s.close();}catch(IOException ignored){}heartbeat.shutdownNow();writer.shutdownNow();pending.clear();sharedDeliveries.clear();synchronized(sharedLock){sharedItem=null;}if(App.service==this)App.service=null;App.phase=App.Phase.DISCONNECTED;App.status="Disconnected";super.onDestroy();}
     @Override public IBinder onBind(Intent intent){return null;}
 }

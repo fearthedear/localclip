@@ -12,6 +12,10 @@ A small, MIT-licensed clipboard companion for macOS and Android. Text and images
 - `LocalClip-adb-bridge.zip`: optional Gboard-compatible automatic-copy helper, Mac launcher and setup instructions. Requires Android 14+ and authorized USB/wireless debugging; tested on Android 17/API 37.
 - `LocalClip-macOS-arm64.zip`: Apple silicon, macOS 13 or later; ad-hoc signed, not notarized. Extract it and move `LocalClip.app` into Applications.
 
+Version 0.5.0 makes both apps Tailscale first and discovers the existing paired device across the tailnet. Keep Tailscale connected on both devices and Mac sharing / Android Connect enabled. No new pairing or Tailscale API token is required. Wi-Fi remains a fallback. See [network setup](docs/NETWORKING.md).
+
+Version 0.4.3 automatically resizes Android image conversions that exceed the transfer limit, with a notice when resizing occurs. Valid PNGs that already fit stay unchanged.
+
 Version 0.4.2 preserves existing PNG screenshots without re-encoding, reports converted-image size limits clearly, and keeps content clear of the status bar, cutouts, navigation bar and keyboard. It includes the VPN connection fix below.
 
 Version 0.4.1 fixes discovered connections with Tailscale/VPN active and makes the discovered, attempted, saved backup and authenticated addresses explicit. Install the new APK over the existing app; Mac 0.4.0 remains compatible.
@@ -76,12 +80,12 @@ Treat the pairing code like a password and replace it in both devices' clipboard
 
 | Feature | Behavior |
 |---|---|
-| Finding the Mac | Bonjour/Android NSD automatically finds the paired Mac after Wi-Fi IP changes. Stable Tailscale names work across networks when both devices are connected. |
+| Finding the Mac | Tailscale routes are preferred. The Mac discovers online tailnet peers and sends source-bound authenticated discovery messages; the paired Android app connects back and remembers the authenticated route. Bonjour/NSD remains a Wi-Fi fallback. |
 | Mac → Android | New Mac copies arrive automatically while Mac sharing and Android's connection service are running and the phone is unlocked. |
 | Android → Mac with Gboard | Automatic new copies with the optional ADB helper; otherwise explicit Share, selected-text action, or focused Send clipboard button. The selected keyboard stays unchanged. |
 | Optional ADB helper | Separate shell process, encrypted loopback channel, explicit debugging authorization. API 37/Gboard emulator tested. Restart after reboot/service stop. Main user only; hidden APIs can change. |
 | Focused automatic sending | Optional checkbox sends new clipboard changes while LocalClip is on screen. Opening the app alone does not upload the existing clipboard. |
-| Images | PNG on the wire; max 8 MiB and 16 megapixels. Existing PNG bytes are preserved; other decodable formats are converted to PNG. Sources or converted output over 8 MiB are rejected with a size-limit message. Mac PNG/TIFF clipboard images are supported. Pasting depends on the destination app. |
+| Images | PNG on the wire; max 8 MiB and 16 megapixels. Existing PNG bytes are preserved; other decodable formats are converted to PNG. Android sharing accepts source files up to 32 MiB / 16 megapixels and automatically resizes when PNG output exceeds the 8 MiB transfer limit. Resizing reduces resolution; fitting PNGs remain byte-for-byte unchanged. Mac PNG/TIFF clipboard images are supported. Pasting depends on the destination app. |
 | Disconnected explicit send | A share can wait in the foreground service for up to 30 seconds after its receiver closes. In-app clipboard/photo actions wait in the main screen while it has focus. No persistent queue; an unavailable Mac requires sharing again after expiry. |
 | Offline automatic changes | Dropped; reconnect and explicitly send the item again. |
 | Locked phone | Incoming clipboard updates are skipped and remain unconfirmed on the Mac. Unlock and send again. |

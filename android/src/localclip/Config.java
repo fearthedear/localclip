@@ -28,6 +28,15 @@ final class Config {
         JSONObject json=new JSONObject();json.put("v",1);json.put("host",host);json.put("port",current.port);json.put("key",Wire.hex(current.key));
         save(c,"localclip1:"+Base64.encodeToString(json.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),Base64.NO_WRAP));
     }
+    static void rememberTailnet(Context c,Config connected,String host,int port)throws Exception{
+        if(!Wire.tailnetIP(host))return;Config current=load(c);
+        if(current==null||!java.util.Arrays.equals(current.key,connected.key))return;
+        java.util.List<String> hosts=new java.util.ArrayList<>();hosts.add(host);
+        for(String old:current.hosts)if(!hosts.contains(old)&&hosts.size()<6)hosts.add(old);
+        if(current.host.equals(host)&&current.hosts.equals(hosts))return;
+        JSONObject json=new JSONObject();json.put("v",1);json.put("host",host);json.put("hosts",new org.json.JSONArray(hosts));json.put("port",port);json.put("key",Wire.hex(current.key));
+        save(c,"localclip1:"+Base64.encodeToString(json.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8),Base64.NO_WRAP));
+    }
     static SecretKey storageKey() throws Exception {
         KeyStore s=KeyStore.getInstance("AndroidKeyStore");s.load(null);
         if(s.containsAlias("localclip-pairing")) return (SecretKey)s.getKey("localclip-pairing",null);

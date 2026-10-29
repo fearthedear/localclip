@@ -1,5 +1,5 @@
 Mac app clipboard integration: 7 assertions passed (named pasteboard; text and PNG in both directions, acknowledgements, automatic local send)
-Large preserved PNG applied byte-for-byte to Mac private pasteboard: 7045193 bytes
+Large preserved PNG applied byte-for-byte to Mac private pasteboard: 7656169 bytes
 PASS concealed pasteboard skipped
 READY Mac clipboard test
 PASS Mac text pasteboard applied

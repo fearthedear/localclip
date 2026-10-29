@@ -27,6 +27,9 @@ PASS private source URI image delivered after receiver closes
 PASS external image share leaves main screen in background
 PASS large compact PNG share completes encrypted Swift round trip
 PASS large PNG share keeps MainActivity in background
+PASS external JPEG fixture requires automatic resizing
+PASS previously oversized conversion shares through encrypted Swift peer
+PASS resized image share leaves MainActivity in background
 PASS LocalClip has focus
 PASS prominent connected badge after authentication
 PASS main screen permits screenshots
@@ -50,4 +53,4 @@ PASS unpaired state exposes pairing without a connected badge
 PASS unpaired share reaches receiver
 PASS unpaired share closes without opening main screen
 PASS unpaired share does not launch main or a connection
-Android clipboard integration: 52 assertions passed on API 37
+Android clipboard integration: 55 assertions passed on API 37

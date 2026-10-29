@@ -56,7 +56,7 @@ public final class MainActivity extends Activity {
 
         button(connection,"Change address / use Tailscale",()->{
             addressFields.setVisibility(addressFields.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE);
-            if(config!=null)address.setText(config.host);
+            updatePeer();if(config!=null)address.setText(config.host);
         },false);
         addressFields=new LinearLayout(this);addressFields.setOrientation(LinearLayout.VERTICAL);connection.addView(addressFields);addressFields.setVisibility(View.GONE);
         address=new EditText(this);address.setSingleLine(true);address.setHint("Mac IP or name.tailnet.ts.net");address.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_URI);addressFields.addView(address);
@@ -64,7 +64,7 @@ public final class MainActivity extends Activity {
             try{Config.updateHost(this,address.getText().toString().trim());updatePeer();addressFields.setVisibility(View.GONE);App.detail="Address saved; pairing preserved";SyncService s=App.service;if(s!=null)s.reconnect();else connect();}
             catch(Exception e){App.detail=e.getMessage();}
         },true);
-        networkHint=label(connection,"Wi-Fi discovery finds your paired Mac after its IP changes. For other networks, enter its Tailscale MagicDNS name and enable Tailscale on both devices.",13);networkHint.setTextColor(MUTED);
+        networkHint=label(connection,"Tailscale first: keep Tailscale enabled on both devices. Your Mac discovers this paired phone on the tailnet; Wi-Fi is used when no tailnet route is reachable.",13);networkHint.setTextColor(MUTED);
 
         LinearLayout sending=card(root);
         label(sending,"Send manually",21).setTypeface(null,Typeface.BOLD);
@@ -128,7 +128,7 @@ public final class MainActivity extends Activity {
         if(service!=null){
             String diagnostics=service.connectionDiagnostics();
             networkHint.setText(connected?"Authenticated Mac at "+service.connectedAddress():service.discoveryState()+(diagnostics.isEmpty()?"":"\nLast connection attempts:\n"+diagnostics));
-        }else networkHint.setText("Wi-Fi discovery looks for your paired Mac. For other networks, use its Tailscale MagicDNS name with Tailscale on at both ends.");
+        }else networkHint.setText("Tailscale first: enable Tailscale on both devices, then Connect. Mac sharing discovers this paired phone across networks. Local Wi-Fi remains available.");
         status.setText(title);status.setTextColor(color);connectionHelp.setText(help);
         connectionButton.setText(service==null?"Connect to Mac":connected?"Disconnect / pause sharing":"Cancel connection");connectionButton.setEnabled(config!=null);
         sendButton.setText(connected?"Send clipboard to Mac":"Connect & send clipboard");sendButton.setAlpha(config==null?0.5f:1f);
@@ -158,7 +158,7 @@ public final class MainActivity extends Activity {
         if("localclip.SEND".equals(intent.getAction())){sendOnFocus=true;if(hasWindowFocus()){sendOnFocus=false;sendClipboard();}return;}
     }
     @Override public void onWindowFocusChanged(boolean focus){super.onWindowFocusChanged(focus);App.focused=focus;if(focus){if(sendOnFocus){sendOnFocus=false;handler.postDelayed(this::sendClipboard,200);}if(shared!=null)connect();}}
-    @Override protected void onResume(){super.onResume();clipboard.addPrimaryClipChangedListener(listener);handler.post(refresh);}
+    @Override protected void onResume(){super.onResume();updatePeer();clipboard.addPrimaryClipChangedListener(listener);handler.post(refresh);}
     @Override protected void onPause(){handler.removeCallbacks(refresh);clipboard.removePrimaryClipChangedListener(listener);App.focused=false;super.onPause();}
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==10&&result==RESULT_OK&&data!=null&&data.getData()!=null)queue(ClipData.newUri(getContentResolver(),"Selected image",data.getData()));}
 }

@@ -22,6 +22,24 @@ public final class Wire {
         return m.doFinal(concat(("LC01/"+label).getBytes(StandardCharsets.US_ASCII), server, client));
     }
     public static String discoveryID(byte[] key)throws Exception { return hex(Arrays.copyOf(mac(key,"discovery",new byte[0],new byte[0]),16)); }
+    public static boolean tailnetIP(String host){
+        String[] parts=host.split("\\.",-1);if(parts.length!=4||!parts[0].equals("100"))return false;
+        try{for(String p:parts)if(!p.matches("[0-9]{1,3}")||Integer.parseInt(p)>255)return false;int second=Integer.parseInt(parts[1]);return second>=64&&second<=127;}catch(NumberFormatException e){return false;}
+    }
+    public static boolean tailnetHost(String host){return tailnetIP(host)||host.endsWith(".ts.net")||host.startsWith("fd7a:115c:a1e0:");}
+    public static byte[] tailnetBeacon(byte[] key,byte[] nonce,String host,int port)throws Exception{
+        if(nonce.length!=32||!tailnetIP(host)||port<1024||port>65535)throw new IOException("Invalid discovery packet");
+        byte[] endpoint=ByteBuffer.allocate(6).putShort((short)port).array();String[] octets=host.split("\\.");for(int i=0;i<4;i++)endpoint[i+2]=(byte)Integer.parseInt(octets[i]);
+        return concat("LCD1".getBytes(StandardCharsets.US_ASCII),nonce,endpoint,mac(key,"tailnet-discovery",nonce,endpoint));
+    }
+    public static int verifyTailnetBeacon(byte[] packet,byte[] key,String source)throws Exception{
+        if(packet.length!=74||!Arrays.equals(Arrays.copyOf(packet,4),"LCD1".getBytes(StandardCharsets.US_ASCII)))throw new IOException("Invalid discovery packet");
+        byte[] nonce=Arrays.copyOfRange(packet,4,36),endpoint=Arrays.copyOfRange(packet,36,42);int port=ByteBuffer.wrap(endpoint).getShort()&65535;
+        String advertised=(endpoint[2]&255)+"."+(endpoint[3]&255)+"."+(endpoint[4]&255)+"."+(endpoint[5]&255);
+        if(!tailnetIP(source)||!source.equals(advertised))throw new GeneralSecurityException("Discovery source mismatch");
+        if(port<1024||!MessageDigest.isEqual(Arrays.copyOfRange(packet,42,74),mac(key,"tailnet-discovery",nonce,endpoint)))throw new GeneralSecurityException("Invalid discovery proof");
+        return port;
+    }
     public static String hex(byte[] bytes) { StringBuilder s = new StringBuilder(); for (byte b : bytes) s.append(String.format(Locale.ROOT,"%02x",b & 255)); return s.toString(); }
     public static byte[] unhex(String s) throws IOException {
         if (!s.matches("[0-9a-fA-F]{64}")) throw new IOException("Secret must be 64 hex characters");

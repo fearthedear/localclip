@@ -114,7 +114,11 @@ final class ClipServer {
             lock.lock(); handshakes-=1; counted=false
             guard generation==gen else { lock.unlock(); return }
             let previous=peer; peer=p; lock.unlock(); previous?.stop()
-            SocketIO.timeout(fd,45); onStatus("Phone connected · encrypted")
+            SocketIO.timeout(fd,45); var address=sockaddr_storage();var length=socklen_t(MemoryLayout<sockaddr_storage>.size);var hostname=[CChar](repeating:0,count:Int(NI_MAXHOST))
+            let result=withUnsafeMutablePointer(to:&address){$0.withMemoryRebound(to:sockaddr.self,capacity:1){getpeername(fd,$0,&length)}}
+            if result==0 { _ = withUnsafePointer(to:&address){$0.withMemoryRebound(to:sockaddr.self,capacity:1){getnameinfo($0,length,&hostname,socklen_t(hostname.count),nil,0,NI_NUMERICHOST)}} }
+            let host=String(cString:hostname).replacingOccurrences(of:"::ffff:",with:"")
+            onStatus("Phone connected · "+(Wire.tailnetIP(host) ? "Tailscale · " : "")+"encrypted")
             while true {
                 let header=try SocketIO.read(fd,4); let payload=try SocketIO.read(fd,Wire.length(header))
                 let message=try ClipMessage(data:p.rx.open(header+payload))
